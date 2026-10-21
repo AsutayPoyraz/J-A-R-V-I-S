@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useJarvis } from "./hooks/useJarvis";
 import { api } from "./api/client";
 import TopBar from "./components/TopBar";
+import GuestBanner from "./components/GuestBanner";
 import SystemStatsCard from "./components/SystemStatsCard";
 import WeatherCard from "./components/WeatherCard";
 import CameraCard from "./components/CameraCard";
@@ -18,10 +19,14 @@ import CenterStage from "./components/CenterStage";
 import ConversationPanel from "./components/ConversationPanel";
 import SettingsModal from "./components/SettingsModal";
 import SmartHomeCard from "./components/SmartHomeCard";
+import GuestLocked from "./components/GuestLocked";
+import LoginGate from "./components/LoginGate";
+import { useSession } from "./hooks/useSession";
 import type { LogoState } from "./types";
 
 export default function App() {
   const jarvis = useJarvis();
+  const session = useSession();
   const chatInputRef = useRef<HTMLInputElement>(null);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -92,7 +97,8 @@ export default function App() {
         onRefresh={() => jarvis.refreshWeather(true)}
       />
       <ReminderCard online={jarvis.online} />
-      <CameraCard
+      <GuestLocked title="Camera" allowed={session.can("device_control")}>
+        <CameraCard
         camera={jarvis.camera}
         photo={jarvis.photo}
         busy={jarvis.cameraBusy}
@@ -102,14 +108,20 @@ export default function App() {
         onCapture={jarvis.capturePhoto}
         onClosePhoto={() => jarvis.setPhoto(null)}
       />
-      <FileTransferCard />
+      </GuestLocked>
+      <GuestLocked title="File Transfer" allowed={session.can("files")}>
+        <FileTransferCard />
+      </GuestLocked>
       <PairCard online={jarvis.online} />
-      <SmartHomeCard />
+      <GuestLocked title="Smart Home" allowed={session.can("device_control")}>
+        <SmartHomeCard />
+      </GuestLocked>
       <UptimeCard stats={jarvis.stats} online={jarvis.online} />
     </>
   );
 
   return (
+    <LoginGate>
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden overflow-y-auto">
       <TopBar
         online={jarvis.online}
@@ -117,6 +129,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenDrawer={() => setDrawerOpen(true)}
       />
+      <GuestBanner />
 
       {/* Çalan alarm banner'ı (Faz 4): user hareketi susar, buton ack yapar */}
       {firingReminders.length > 0 && (
@@ -234,5 +247,6 @@ export default function App() {
         onChangeLanguage={jarvis.changeLanguage}
       />
     </div>
+    </LoginGate>
   );
 }

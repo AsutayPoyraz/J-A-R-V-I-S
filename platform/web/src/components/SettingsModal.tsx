@@ -5,6 +5,7 @@ import { t, getLang } from "../i18n";
 import type {
   AppSettings,
   ChatPanelPosition,
+  ConversationMode,
   Language,
   VoiceStatus,
 } from "../types";
@@ -22,6 +23,8 @@ interface Props {
     city?: string;
     language?: Language;
     chat_panel_position?: ChatPanelPosition;
+    conversation_mode?: ConversationMode;
+    custom_palette?: Record<string, string>;
   }) => Promise<unknown>;
   onSaveVoice: (patch: {
     wake_phrases?: string[];
@@ -33,13 +36,30 @@ interface Props {
   onChangeLanguage: (lang: Language) => Promise<unknown> | void;
 }
 
-/** Madde 4: bordo VARSAYILAN tema; etiketler i18n'den gelir. */
+/** Prompt 0/4: Bordo varsayılan; Light/Dark/Custom + eski renkler korunur. */
 const COLORS: { value: AppSettings["background_color"]; css: string; labelKey: string }[] = [
   { value: "maroon", css: "#800000", labelKey: "theme.maroon" },
+  { value: "dark", css: "#111318", labelKey: "theme.dark" },
+  { value: "light", css: "#f7f3ee", labelKey: "theme.light" },
+  { value: "custom", css: "connect", labelKey: "theme.custom" },
   { value: "red", css: "rgb(239 68 68)", labelKey: "theme.red" },
   { value: "green", css: "rgb(34 197 94)", labelKey: "theme.green" },
   { value: "blue", css: "rgb(59 130 246)", labelKey: "theme.blue" },
 ];
+
+const MODES: { value: ConversationMode; labelKey: string; descKey: string }[] = [
+  { value: "adaptive", labelKey: "mode.adaptive", descKey: "mode.adaptive_desc" },
+  { value: "formal", labelKey: "mode.formal", descKey: "mode.formal_desc" },
+  { value: "casual", labelKey: "mode.casual", descKey: "mode.casual_desc" },
+];
+
+/** "#rrggbb" → "r g b" (CSS değişkenleri rgb(r g b / a) biçimini bekler). */
+function hexToRgb(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return "128 0 0";
+  const n = parseInt(m[1], 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}
 
 const POSITIONS: { value: ChatPanelPosition; labelKey: string }[] = [
   { value: "right", labelKey: "settings.chat_position_right" },
@@ -55,6 +75,9 @@ export default function SettingsModal({
   const [color, setColor] = useState<AppSettings["background_color"]>("maroon");
   const [city, setCity] = useState("");
   const [chatPosition, setChatPosition] = useState<ChatPanelPosition>("right");
+  const [mode, setMode] = useState<ConversationMode>("adaptive");
+  const [customAccent, setCustomAccent] = useState("#800000");
+  const [customBg, setCustomBg] = useState("#0d0308");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +92,12 @@ export default function SettingsModal({
       setColor(settings.background_color);
       setCity(settings.city);
       setChatPosition(settings.chat_panel_position);
+      setMode(settings.conversation_mode ?? "adaptive");
+      if (settings.custom_palette?.accent) {
+        const [r, g, b] = settings.custom_palette.accent.split(" ").map(Number);
+        if ([r, g, b].every((n) => Number.isFinite(n))) setCustomAccent(`#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`);
+      }
+      if (settings.custom_palette?.bg_page) setCustomBg(settings.custom_palette.bg_page);
       setError(null);
     }
   }, [open, settings]);
@@ -89,10 +118,16 @@ export default function SettingsModal({
     setError(null);
     try {
       // Madde 7/32: tema, şehir ve panel konumu kullanıcıya özel DB'de saklanır.
+      // Prompt 0/4: custom seçiliyse palet de gönderilir.
       await onSave({
         background_color: color,
         city: city.trim() || undefined,
         chat_panel_position: chatPosition,
+        conversation_mode: mode,
+        custom_palette:
+          color === "custom"
+            ? { accent: hexToRgb(customAccent), bg_page: customBg }
+            : undefined,
       });
       const wakes = wakeText.split("\n").map((l) => l.trim()).filter((l) => l.length >= 4).slice(0, 12);
       const exits = exitText.split(",").map((l) => l.trim()).filter((l) => l.length >= 3).slice(0, 12);
@@ -176,21 +211,91 @@ export default function SettingsModal({
           <label className="mb-2 block text-[11px] uppercase tracking-widest text-slate-400">
             {t("settings.theme")}
           </label>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2">
             {COLORS.map((c) => (
               <button
                 key={c.value}
                 type="button"
                 onClick={() => setColor(c.value)}
-                className="flex flex-1 flex-col items-center gap-1.5 rounded-lg border p-3 transition-transform hover:scale-[1.03]"
+                className="flex min-w-[70px] flex-1 flex-col items-center gap-1.5 rounded-lg border p-2.5 transition-transform hover:scale-[1.03]"
                 style={{
                   borderColor: color === c.value ? c.css : "var(--border)",
                   background: color === c.value ? "rgb(255 255 255 / 0.04)" : "transparent",
-                  boxShadow: color === c.value ? `0 0 14px ${c.css}66` : "none",
+                  boxShadow: color === c.value && c.value !== "custom" ? `0 0 14px ${c.css}66` : "none",
                 }}
               >
-                <span className="h-5 w-5 rounded-full" style={{ background: c.css, boxShadow: `0 0 10px ${c.css}` }} />
+                <span
+                  className="h-5 w-5 rounded-full"
+                  style={{
+                    background:
+                      c.value === "custom"
+                        ? "conic-gradient(from 0deg, #800000, #2b6cb0, #2f855a, #800000)"
+                        : c.css,
+                    boxShadow: c.value === "custom" ? "none" : `0 0 10px ${c.css}`,
+                  }}
+                />
                 <span className="text-[10px] text-slate-300">{t(c.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+          {color === "custom" && (
+            <div className="mt-3 flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                {t("settings.custom_accent")}
+                <input
+                  type="color"
+                  value={customAccent}
+                  onChange={(e) => setCustomAccent(e.target.value)}
+                  className="h-7 w-9 cursor-pointer rounded border-0 bg-transparent"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                {t("settings.custom_bg")}
+                <input
+                  type="color"
+                  value={customBg}
+                  onChange={(e) => setCustomBg(e.target.value)}
+                  className="h-7 w-9 cursor-pointer rounded border-0 bg-transparent"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {/* Prompt 3: konuşma modu */}
+        <div className="mb-5">
+          <label className="mb-2 block text-[11px] uppercase tracking-widest text-slate-400">
+            {t("settings.mode")}
+          </label>
+          <div className="space-y-1.5">
+            {MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                role="radio"
+                aria-checked={mode === m.value}
+                onClick={() => setMode(m.value)}
+                className="flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left"
+                style={{
+                  borderColor: mode === m.value ? "rgb(var(--accent-soft-rgb))" : "var(--border)",
+                  background: mode === m.value ? "rgb(var(--accent-rgb) / 0.15)" : "transparent",
+                }}
+              >
+                <span
+                  className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border"
+                  style={{ borderColor: "rgb(var(--accent-soft-rgb))" }}
+                >
+                  {mode === m.value && (
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: "rgb(var(--accent-soft-rgb))" }}
+                    />
+                  )}
+                </span>
+                <span>
+                  <span className="block text-xs font-medium text-slate-200">{t(m.labelKey)}</span>
+                  <span className="block text-[10px] text-slate-500">{t(m.descKey)}</span>
+                </span>
               </button>
             ))}
           </div>

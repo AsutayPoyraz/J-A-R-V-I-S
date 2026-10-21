@@ -24,6 +24,9 @@ class SettingsUpdate(BaseModel):
     city: str | None = None
     language: str | None = None
     chat_position: str | None = None
+    conversation_mode: str | None = None
+    # Özel palet: {"accent": "r g b", "accent_soft": "r g b", "bg_page": "#hex"}
+    custom_palette: dict[str, str] | None = None
 
 
 @router.get("/api/settings")
@@ -42,13 +45,37 @@ def get_settings(request: Request) -> dict:
         "city": row["city"],
         "language": language,
         "chat_position": position,
+        "conversation_mode": _mode(row),
+        "custom_palette": _palette(row),
+        "twofa_enabled": bool(row.get("twofa_enabled", 1)),
         # "guest" test sözleşmesi; owner_is_guest geriye dönük uyumluluk için.
         "guest": database.is_guest(owner),
         "owner_is_guest": database.is_guest(owner),
         "allowed_background_colors": list(config.ALLOWED_BG_COLORS),
         "allowed_languages": list(config.ALLOWED_LANGUAGES),
         "allowed_chat_positions": list(config.ALLOWED_CHAT_POSITIONS),
+        "allowed_conversation_modes": list(config.ALLOWED_CONVERSATION_MODES),
     }
+
+
+def _mode(row: dict) -> str:
+    mode = str(row.get("conversation_mode") or config.DEFAULT_CONVERSATION_MODE)
+    return mode if mode in config.ALLOWED_CONVERSATION_MODES else config.DEFAULT_CONVERSATION_MODE
+
+
+def _palette(row: dict) -> dict[str, str] | None:
+    raw = row.get("custom_palette")
+    if not raw:
+        return None
+    try:
+        import json
+
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return {k: str(v) for k, v in parsed.items() if k in config.ALLOWED_PALETTE_KEYS}
 
 
 @router.put("/api/settings")
@@ -80,6 +107,30 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
                 status_code=422, detail="Şehir adı 1-64 karakter olmalı."
             )
         patch["city"] = city
+    if payload.conversation_mode is not None:
+        if payload.conversation_mode not in config.ALLOWED_CONVERSATION_MODES:
+            raise HTTPException(status_code=422, detail="Geçersiz konuşma modu.")
+        patch["conversation_mode"] = payload.conversation_mode
+    if payload.custom_palette is not None:
+        import json
+        import re
+
+        rgb = re.compile(r"^\d{1,3} \d{1,3} \d{1,3}$")
+        hex_color = re.compile(r"^#[0-9a-fA-F]{6}$")
+        palette: dict[str, str] = {}
+        for key, value in payload.custom_palette.items():
+            if key not in config.ALLOWED_PALETTE_KEYS:
+                raise HTTPException(status_code=422, detail="Geçersiz palet anahtarı.")
+            value = str(value).strip()
+            pattern = hex_color if key == "bg_page" else rgb
+            if not pattern.fullmatch(value):
+                raise HTTPException(status_code=422, detail="Geçersiz renk biçimi.")
+            if key != "bg_page":
+                parts = [int(p) for p in value.split()]
+                if any(p > 255 for p in parts):
+                    raise HTTPException(status_code=422, detail="Geçersiz renk değeri.")
+            palette[key] = value
+        patch["custom_palette"] = json.dumps(palette) if palette else ""
 
     if patch:
         database.update_user_settings(owner, patch)
@@ -88,4 +139,33 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
             actor=owner,
             detail=",".join(f"{k}={v}" for k, v in sorted(patch.items()))[:200],
         )
+        # Prompt 9: aynı sahibin diğer cihazlarına (ve aynı kullanıcının tüm
+        # telefonlarına) yayınla. WS yoksa sessizce geç.
+        _broadcast_settings_update(request, owner, patch)
     return get_settings(request)
+
+
+def _broadcast_settings_update(request: Request, owner: str, patch: dict) -> None:
+    from . import ws as ws_module
+
+    user = getattr(getattr(request, "state", None), "user", None) or {}
+    event = {
+        "type": "settings.changed",
+        "owner": owner,
+        "changes": {k: v for k, v in patch.items() if k not in ("custom_palette",)},
+        "custom_palette": get_settings(request).get("custom_palette"),
+    }
+    try:
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    async def _publish() -> None:
+        await ws_module.manager.publish_to_owner(owner, event)
+        user_id = str(user.get("id") or "")
+        if user_id:
+            await ws_module.manager.publish_to_user(user_id, event)
+
+    loop.create_task(_publish())

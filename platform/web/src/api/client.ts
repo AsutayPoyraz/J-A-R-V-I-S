@@ -39,52 +39,171 @@ export const deviceToken = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = deviceToken.get();
-  const resp = await fetch(path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Client-ID": clientId.get(),
-      ...(token ? { "X-Device-Token": token } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!resp.ok) {
-    let detail = `HTTP ${resp.status}`;
-    try {
-      const body = await resp.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      /* gövde yok — önemsiz */
-    }
-    throw new ApiError(resp.status, detail);
+/** Prompt 1: JWT oturumu.
+ *
+ * Saklama stratejisi: tokenlar localStorage'da tutulur çünkü backend
+ * `allow_credentials=False` ile çalışır ve cookie tabanlı CSRF koruması
+ * istemci tarafında ek karmaşıklık getirir. XSS riski kabul edilir; azaltmak
+ * için access token 15 dk ile sınırlıdır, refresh her kullanımda döndürülür
+ * (rotation) ve sunucu tarafında iptal edilebilir.
+ */
+const ACCESS_KEY = "jarvis.access_token";
+const REFRESH_KEY = "jarvis.refresh_token";
+
+export const authToken = {
+  access: () => localStorage.getItem(ACCESS_KEY) ?? "",
+  refresh: () => localStorage.getItem(REFRESH_KEY) ?? "",
+  set: (access: string, refresh?: string) => {
+    if (access) localStorage.setItem(ACCESS_KEY, access);
+    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+  },
+  clear: () => {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  },
+  isLoggedIn: () => !!localStorage.getItem(ACCESS_KEY),
+};
+
+interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  user_id?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+let refreshing: Promise<boolean> | null = null;
+/** Misafir modunda X-Client-ID gönderilmez → backend owner='guest:*' üretir. */
+function isGuest(): boolean {
+  try {
+    return sessionStorage.getItem("jarvis.guest") === "1";
+  } catch {
+    return false;
   }
+}
+
+/** Access token'ı refresh token ile yeniler; eşzamanlı çağrılar tek istek paylaşır. */
+async function refreshAccess(): Promise<boolean> {
+  const refresh = authToken.refresh();
+  if (!refresh) return false;
+  if (!refreshing) {
+    refreshing = (async () => {
+      try {
+        const resp = await fetch("/api/auth/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refresh }),
+        });
+        if (!resp.ok) {
+          authToken.clear();
+          window.dispatchEvent(new CustomEvent("jarvis:auth-expired"));
+          return false;
+        }
+        const pair = (await resp.json()) as TokenPair;
+        authToken.set(pair.access_token, pair.refresh_token);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshing = null;
+      }
+    })();
+  }
+  return refreshing;
+}
+
+function authHeaders(): Record<string, string> {
+  const access = authToken.access();
+  return access ? { Authorization: `Bearer ${access}` } : {};
+}
+
+async function openRequest(path: string, init?: RequestInit): Promise<Response> {
+  const token = deviceToken.get();
+  const headers: Record<string, string> = {
+    ...authHeaders(),
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  if (!isGuest()) headers["X-Client-ID"] = clientId.get();
+  // FormData yüklerken Content-Type'ı tarayıcı boundary ile kendisi koyar.
+  if (!(init?.body instanceof FormData)) headers["Content-Type"] = "application/json";
+  if (token && !isGuest()) headers["X-Device-Token"] = token;
+  return fetch(path, { ...init, headers });
+}
+
+async function readDetail(resp: Response): Promise<string> {
+  let detail = `HTTP ${resp.status}`;
+  try {
+    const body = await resp.json();
+    if (typeof body?.detail === "string") detail = body.detail;
+  } catch {
+    /* gövde yok — önemsiz */
+  }
+  return detail;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let resp = await openRequest(path, init);
+  // Süresi dolmuş access token → bir kez refresh dene, sonra isteği tekrarla.
+  if (resp.status === 401 && authToken.refresh() && !path.startsWith("/api/auth/")) {
+    if (await refreshAccess()) resp = await openRequest(path, init);
+  }
+  if (!resp.ok) throw new ApiError(resp.status, await readDetail(resp));
   return (await resp.json()) as T;
 }
 
 async function requestBlob(path: string): Promise<Blob> {
-  const token = deviceToken.get();
-  const resp = await fetch(path, {
-    headers: {
-      ...(token ? { "X-Device-Token": token } : {}),
-      "X-Client-ID": clientId.get(),
-    },
-  });
+  const resp = await openRequest(path);
   if (!resp.ok) throw new ApiError(resp.status, `HTTP ${resp.status}`);
   return resp.blob();
 }
 
 export const api = {
+  /** Prompt 2: oturum modu + yetenekler (misafirde buton kapısı). */
+  session: () =>
+    request<{ mode: "guest" | "user" | "local"; capabilities: Record<string, boolean> }>(
+      "/api/session"
+    ),
+
+  /** Prompt 1: kimlik doğrulama. */
+  authRegister: (body: {
+    first_name: string;
+    last_name: string;
+    birth_date: string;
+    password: string;
+    security_question: string;
+    security_answer: string;
+  }) => request<TokenPair>("/api/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  authLogin: (body: { first_name: string; last_name: string; password: string }) =>
+    request<TokenPair>("/api/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  authMe: () => request<{ user_id: string; first_name: string; last_name: string; local?: boolean }>("/api/auth/me"),
+  authReset: (body: {
+    first_name: string;
+    last_name: string;
+    birth_date: string;
+    security_answer: string;
+    new_password: string;
+  }) =>
+    request<{ ok: boolean }>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  authLogout: () =>
+    request<{ ok: boolean }>("/api/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: authToken.refresh() }),
+    }),
   health: () => request<import("../types").HealthInfo>("/api/health"),
   integrations: () =>
     request<{ integrations: Record<string, { configured: boolean; connected?: boolean; reachable?: boolean; detail?: string }> }>(
       "/api/integrations"
     ),
   stats: () => request<import("../types").SystemStats>("/api/system/stats"),
-  weather: (refresh = false) =>
+  weather: (refresh = false, coords?: { lat: number; lon: number }) =>
     request<import("../types").WeatherInfo>(
-      `/api/weather${refresh ? "?refresh=true" : ""}`
+      `/api/weather?${new URLSearchParams({
+        ...(refresh ? { refresh: "true" } : {}),
+        ...(coords ? { lat: String(coords.lat), lon: String(coords.lon) } : {}),
+      }).toString()}`
     ),
   settings: () => request<import("../types").AppSettings>("/api/settings"),
   updateSettings: (
@@ -93,6 +212,8 @@ export const api = {
       city: string;
       language: string;
       chat_panel_position: string;
+      conversation_mode: string;
+      custom_palette: Record<string, string>;
     }>
   ) =>
     request<import("../types").AppSettings>("/api/settings", {

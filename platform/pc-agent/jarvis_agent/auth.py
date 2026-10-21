@@ -9,34 +9,42 @@ Sırlar koda gömülmez: JARVIS_JWT_SECRET .env'den okunur (config.py).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import re
-import secrets
+import sqlite3
 import threading
 import time
+from contextlib import closing
 from typing import Any, Optional
 
 import bcrypt
 import jwt
 
 from . import config
+from .store import database
 
 _NAME_RE = re.compile(r"^[\wçğıöşüÇĞİÖŞÜ][\wçğıöşüÇĞİÖŞÜ\s.-]{1,39}$", re.UNICODE)
 _BIRTH_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# Oturumla birlikte üretilen geçici secret (restart'ta token'lar düşer).
-_EPHEMERAL_SECRET = secrets.token_urlsafe(48)
-
-# ── Hatalı giriş kilidi (bellek içi, kişisel kullanım) ───────────────────────
 _lock_lock = threading.Lock()
-_login_state: dict[str, dict[str, float]] = {}
 
 
 class AuthError(Exception):
-    """Kullanıcıya dönülebilir kimlik hatası (HTTP status ile)."""
+    """Kullanıcıya dönülebilir kimlik hatası (HTTP status + opsiyonel başlıklar)."""
 
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(
+        self, message: str, status_code: int = 400, headers: Optional[dict] = None
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.headers = headers or {}
+
+
+class AuthUnavailable(AuthError):
+    """JARVIS_JWT_SECRET tanımlı değil — güvensiz varsayılanla çalışılmaz."""
+
+    def __init__(self) -> None:
+        super().__init__("Kimlik doğrulama yapılandırılmamış (JARVIS_JWT_SECRET).", 503)
 
 
 # ── Şifre hash (bcrypt, madde 16: 12 round) ──────────────────────────────────
@@ -55,8 +63,20 @@ def verify_secret(plain: str, hashed: str) -> bool:
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
 
+def normalize_answer(value: str) -> str:
+    """Güvenlik cevabı karşılaştırması için normalize eder (strip + casefold)."""
+    return " ".join((value or "").strip().casefold().split())
+
+
+def auth_available() -> bool:
+    """JARVIS_JWT_SECRET tanımlı mı? (Auth uçlarının çalışması için şart.)"""
+    return bool((config.AUTH_SECRET or "").strip())
+
+
 def _secret() -> str:
-    return config.AUTH_SECRET or _EPHEMERAL_SECRET
+    if not auth_available():
+        raise AuthUnavailable()
+    return config.AUTH_SECRET.strip()
 
 
 def make_token(user_id: str, token_type: str, ttl_seconds: int) -> str:
@@ -66,7 +86,8 @@ def make_token(user_id: str, token_type: str, ttl_seconds: int) -> str:
         "typ": token_type,
         "iat": now,
         "exp": now + dt.timedelta(seconds=ttl_seconds),
-        "jti": secrets.token_urlsafe(8),  # tekil token kimliği
+        # Tekil token kimliği (refresh rotation iptali için).
+        "jti": f"{token_type}.{time.time_ns()}",
     }
     return jwt.encode(payload, _secret(), algorithm="HS256")
 
@@ -109,6 +130,40 @@ def bearer_of(request: Any) -> Optional[str]:
     return None
 
 
+# ── Refresh token iptali (rotation) ──────────────────────────────────────────
+
+def revoke_token(payload: dict[str, Any]) -> None:
+    """Refresh rotation: kullanılmış refresh token'ın jti'sini iptal eder."""
+    jti = str(payload.get("jti") or "")
+    exp = float(payload.get("exp") or (time.time() + config.REFRESH_TOKEN_TTL_SECONDS))
+    if not jti:
+        return
+    try:
+        with database._write_lock, closing(database.connect()) as conn, conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)",
+                (jti, exp),
+            )
+            conn.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (time.time(),))
+    except sqlite3.Error:
+        # İptal kaydı yazılamazsa akış bozulmaz.
+        pass
+
+
+def is_revoked(payload: dict[str, Any]) -> bool:
+    jti = str(payload.get("jti") or "")
+    if not jti:
+        return False
+    try:
+        with closing(database.connect()) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)
+            ).fetchone()
+    except sqlite3.Error:
+        return False
+    return row is not None
+
+
 # ── Doğrulamalar ─────────────────────────────────────────────────────────────
 
 def validate_name(value: str, label: str) -> str:
@@ -137,39 +192,162 @@ def validate_password(value: str) -> str:
     return value
 
 
+def validate_security_question(value: str) -> str:
+    cleaned = (value or "").strip()
+    if len(cleaned) < 4 or len(cleaned) > 200:
+        raise AuthError("Güvenlik sorusu 4-200 karakter olmalı.", 422)
+    return cleaned
+
+
+def validate_security_answer(value: str) -> str:
+    cleaned = (value or "").strip()
+    if len(cleaned) < 2 or len(cleaned) > 120:
+        raise AuthError("Güvenlik cevabı 2-120 karakter olmalı.", 422)
+    return cleaned
+
+
 # ── Hatalı giriş kilidi (madde 16: 5 hata → 15 dk blok) ──────────────────────
 
-def _lock_key(first_name: str, last_name: str) -> str:
-    return f"{first_name.strip().lower()}|{last_name.strip().lower()}"
+def _lock_key(first_name: str, last_name: str, ip: str = "") -> str:
+    name = f"{first_name.strip().lower()}|{last_name.strip().lower()}"
+    return f"{name}|{ip.strip() or '-'}"
 
 
-def check_not_locked(first_name: str, last_name: str) -> None:
-    key = _lock_key(first_name, last_name)
-    with _lock_lock:
-        state = _login_state.get(key)
-        if state and state.get("blocked_until", 0) > time.time():
-            remaining = int(state["blocked_until"] - time.time())
+def check_not_locked(first_name: str, last_name: str, ip: str = "") -> None:
+    key = _lock_key(first_name, last_name, ip)
+    with closing(database.connect()) as conn:
+        row = conn.execute(
+            "SELECT blocked_until FROM login_attempts WHERE lock_key = ?", (key,)
+        ).fetchone()
+    if row:
+        remaining = float(row["blocked_until"] or 0) - time.time()
+        if remaining > 0:
+            seconds = max(1, int(remaining))
             raise AuthError(
-                f"Çok fazla hatalı giriş. {remaining} sn sonra tekrar deneyin.", 429
+                f"Çok fazla hatalı giriş. {seconds} sn sonra tekrar deneyin.",
+                429,
+                {"Retry-After": str(seconds)},
             )
 
 
-def register_failure(first_name: str, last_name: str) -> None:
-    key = _lock_key(first_name, last_name)
-    with _lock_lock:
-        state = _login_state.setdefault(key, {"fails": 0.0, "blocked_until": 0.0})
-        state["fails"] = float(state.get("fails", 0)) + 1
-        if state["fails"] >= config.LOGIN_MAX_FAILURES:
-            state["blocked_until"] = time.time() + config.LOGIN_BLOCK_SECONDS
-            state["fails"] = 0.0
+def register_failure(first_name: str, last_name: str, ip: str = "") -> None:
+    key = _lock_key(first_name, last_name, ip)
+    now = time.time()
+    stamp = dt.datetime.now().isoformat(timespec="seconds")
+    with _lock_lock, closing(database.connect()) as conn, conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO login_attempts (lock_key, fails, blocked_until, updated_at) "
+            "VALUES (?, 0, 0, ?)",
+            (key, stamp),
+        )
+        row = conn.execute(
+            "SELECT fails, blocked_until FROM login_attempts WHERE lock_key = ?", (key,)
+        ).fetchone()
+        fails = int(row["fails"] or 0)
+        blocked_until = float(row["blocked_until"] or 0)
+        if blocked_until and blocked_until <= now:
+            # Süre doldu → sayaç sıfırdan başlar.
+            fails, blocked_until = 0, 0.0
+        fails += 1
+        if fails >= config.LOGIN_MAX_FAILURES:
+            blocked_until = now + config.LOGIN_BLOCK_SECONDS
+            fails = 0
+        conn.execute(
+            "UPDATE login_attempts SET fails = ?, blocked_until = ?, updated_at = ? "
+            "WHERE lock_key = ?",
+            (fails, blocked_until, stamp, key),
+        )
 
 
-def register_success(first_name: str, last_name: str) -> None:
-    with _lock_lock:
-        _login_state.pop(_lock_key(first_name, last_name), None)
+def register_success(first_name: str, last_name: str, ip: str = "") -> None:
+    key = _lock_key(first_name, last_name, ip)
+    with _lock_lock, closing(database.connect()) as conn, conn:
+        conn.execute("DELETE FROM login_attempts WHERE lock_key = ?", (key,))
 
 
 def reset_login_locks() -> None:
     """Yalnızca testler/kurtarma için: tüm kilitleri temizler."""
-    with _lock_lock:
-        _login_state.clear()
+    with _lock_lock, closing(database.connect()) as conn, conn:
+        conn.execute("DELETE FROM login_attempts")
+
+
+# ── Hesap akışları (db katmanı üzerine ince sarmalayıcı) ────────────────────
+
+def user_public(user: dict[str, Any]) -> dict[str, Any]:
+    """İstemciye dönen güvenli kullanıcı alanları (hash asla sızmaz)."""
+    return {
+        "user_id": user.get("id"),
+        "first_name": user.get("first_name"),
+        "last_name": user.get("last_name"),
+        "birth_date": user.get("birth_date"),
+    }
+
+
+def create_account(
+    first_name: str,
+    last_name: str,
+    birth_date: str,
+    password: str,
+    security_question: str,
+    security_answer: str,
+) -> dict[str, Any]:
+    first = validate_name(first_name, "Ad")
+    last = validate_name(last_name, "Soyad")
+    birth = validate_birth_date(birth_date)
+    password = validate_password(password)
+    question = validate_security_question(security_question)
+    answer = validate_security_answer(security_answer)
+    try:
+        return database.create_user(
+            first,
+            last,
+            birth,
+            hash_secret(password),
+            question,
+            hash_secret(normalize_answer(answer)),
+        )
+    except ValueError as exc:
+        raise AuthError(str(exc), 409) from exc
+
+
+def authenticate(
+    first_name: str, last_name: str, password: str, ip: str = ""
+) -> dict[str, Any]:
+    """Kimliği doğrular. Kullanıcı varlığı sızdırılmaz (tek tip 401 mesajı)."""
+    check_not_locked(first_name, last_name, ip)
+    user = database.get_user_by_name(first_name, last_name)
+    if user is None or not verify_secret(password, str(user.get("password_hash") or "")):
+        register_failure(first_name, last_name, ip)
+        raise AuthError("Ad, soyad veya şifre hatalı.", 401)
+    register_success(first_name, last_name, ip)
+    return user
+
+
+def reset_password(
+    first_name: str,
+    last_name: str,
+    birth_date: str,
+    security_answer: str,
+    new_password: str,
+    ip: str = "",
+) -> str:
+    """Güvenlik cevabıyla şifre sıfırlar; kullanıcı varlığını sızdırmaz.
+
+    Başarısız denemeler de giriş kilidi sayacına eklenir.
+    """
+    new_password = validate_password(new_password)
+    generic = AuthError("Bilgiler doğrulanamadı.", 400)
+    check_not_locked(first_name, last_name, ip)
+    user = database.get_user_by_name(first_name, last_name)
+    answer_ok = user is not None and verify_secret(
+        normalize_answer(security_answer), str(user.get("security_answer_hash") or "")
+    )
+    birth_ok = user is not None and str(user.get("birth_date") or "") == (
+        birth_date or ""
+    ).strip()
+    if not (answer_ok and birth_ok):
+        register_failure(first_name, last_name, ip)
+        raise generic
+    database.update_user_password(str(user["id"]), hash_secret(new_password))
+    register_success(first_name, last_name, ip)
+    return str(user["id"])

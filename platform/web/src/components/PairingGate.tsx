@@ -18,7 +18,14 @@ function guessName(): string {
   return "Tarayıcı";
 }
 
-export default function PairingGate({ onPaired }: { onPaired: () => void }) {
+export default function PairingGate({
+  onPaired,
+  onGuest,
+}: {
+  onPaired: () => void;
+  /** Prompt 2: eşleşmeden yalnızca sohbetle devam (kalıcılık yok). */
+  onGuest?: () => void;
+}) {
   const isPC = LOOPBACK.includes(location.hostname);
   const [code, setCode] = useState(new URLSearchParams(location.search).get("pair") ?? "");
   const [name, setName] = useState(guessName());
@@ -189,6 +196,13 @@ export default function PairingGate({ onPaired }: { onPaired: () => void }) {
                 {busy ? "Eşleştiriliyor..." : "Eşleştir"}
               </button>
             </form>
+            <button
+              type="button"
+              onClick={onGuest}
+              className="mt-3 w-full rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5"
+            >
+              Misafir olarak devam et
+            </button>
           </>
         )}
 

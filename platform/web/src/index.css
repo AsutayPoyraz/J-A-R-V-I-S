@@ -9,8 +9,20 @@
    içindeki logo öğelerinde geçerlidir (kesin renk kuralı).
    ════════════════════════════════════════════════════════════════════ */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════════════
+   TEMA MOTORU
+   Arka plan rengi: <html data-bg="..."> ile değişir.
+   Varsayılan: BORDO (data-bg yoksa da bordo uygulanır; index.html'deki
+   inline script önce localStorage'daki son temayı boyar → FOUC yok).
+   Renk geçişleri prefers-reduced-motion'a saygılıdır.
+   ════════════════════════════════════════════════════════════════════ */
+
 :root,
-:root[data-bg="blue"] {
+:root[data-bg="maroon"] {
   --accent-rgb: 59 130 246;          /* blue-500 */
   --accent-soft-rgb: 147 197 253;   /* blue-300 */
   --bg-page: #04070f;
@@ -38,6 +50,58 @@
   --bg-page: #0d0308;
   --bg-glow-1: rgb(139 0 0 / 0.34);
   --bg-glow-2: rgb(196 30 58 / 0.16);
+}
+
+/* Açık tema (Prompt 0/4) */
+:root[data-bg="light"] {
+  --accent-rgb: 128 0 0;
+  --accent-soft-rgb: 153 27 27;
+  --bg-page: #f7f3ee;
+  --bg-glow-1: rgb(128 0 0 / 0.08);
+  --bg-glow-2: rgb(139 115 85 / 0.10);
+  --panel: rgb(255 255 255 / 0.72);
+  --panel-strong: rgb(255 255 255 / 0.9);
+  --border: rgb(128 0 0 / 0.22);
+  --border-strong: rgb(128 0 0 / 0.45);
+  --text-main: rgb(32 26 24);
+  --text-dim: rgb(90 78 72);
+  --text-faint: rgb(130 118 110);
+  color-scheme: light;
+}
+/* Koyu tema */
+:root[data-bg="dark"] {
+  --accent-rgb: 176 48 48;
+  --accent-soft-rgb: 240 190 180;
+  --bg-page: #07080c;
+  --bg-glow-1: rgb(40 40 55 / 0.35);
+  --bg-glow-2: rgb(176 48 48 / 0.12);
+  --panel: rgb(255 255 255 / 0.04);
+  --panel-strong: rgb(255 255 255 / 0.07);
+  --text-main: rgb(226 232 240);
+  --text-dim: rgb(148 163 184);
+  --text-faint: rgb(100 116 139);
+  color-scheme: dark;
+}
+/* Özel palet: JS, --accent-rgb/--accent-soft-rgb/--bg-page üzerine yazar. */
+:root[data-bg="custom"] {
+  --accent-rgb: 128 0 0;
+  --accent-soft-rgb: 224 167 152;
+  --bg-page: #0d0308;
+  color-scheme: dark;
+}
+
+/* Tema geçiş animasyonu (Prompt 0/4) — yalnızca renk özellikleri. */
+html.theme-transition,
+html.theme-transition body,
+html.theme-transition .panel,
+html.theme-transition .btn-accent {
+  transition: background-color 240ms ease, color 240ms ease, border-color 240ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition body {
+    transition: none;
+  }
 }
 
 :root {
@@ -245,7 +309,7 @@ select {
    (madde 8) ve sohbet paneli konumu (madde 32)
    ════════════════════════════════════════════════════════════════════ */
 
-/* ── Bordo tema: koyu bordo birincil renk, açık bej zemin ── */
+/* ── Bordo tema: koyu bordo birincil renk (varsayılan) ── */
 html[data-bg="maroon"] {
   --accent-rgb: 128 0 0;        /* #800000 bordo */
   --accent-soft-rgb: 224 167 152;

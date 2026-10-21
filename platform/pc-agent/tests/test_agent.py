@@ -109,7 +109,9 @@ def test_ws_stats_stream(client):
 def test_settings_defaults(client):
     body = client.get("/api/settings").json()
     assert body["background_color"] in config.ALLOWED_BG_COLORS
-    assert body["allowed_background_colors"] == ["red", "green", "blue", "maroon"]
+    assert body["allowed_background_colors"] == list(config.ALLOWED_BG_COLORS)
+    for expected in ("red", "green", "blue", "maroon"):
+        assert expected in body["allowed_background_colors"]
     assert body["city"]
 
 

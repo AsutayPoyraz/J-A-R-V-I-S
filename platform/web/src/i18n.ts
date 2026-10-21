@@ -96,6 +96,57 @@ const tr: Dict = {
   "pair.remove_failed": "Cihaz kaldırılamadı",
   "pair.last_seen": "son görülme",
   "pair.device": "cihaz",
+  "pair.enter_pin": "PIN kodunu elle gir",
+  "pair.continue_guest": "Misafir olarak devam et",
+
+  // Kimlik doğrulama (Prompt 1)
+  "auth.title": "JARVIS'e giriş",
+  "auth.subtitle": "Hesabınıza giriş yapın veya yeni hesap oluşturun.",
+  "auth.login": "Giriş yap",
+  "auth.register": "Kayıt ol",
+  "auth.forgot": "Şifremi unuttum",
+  "auth.logout": "Çıkış yap",
+  "auth.first_name": "Ad",
+  "auth.last_name": "Soyad",
+  "auth.birth_date": "Doğum tarihi (YYYY-AA-GG)",
+  "auth.password": "Şifre (en az 8 karakter)",
+  "auth.security_question": "Güvenlik sorusu",
+  "auth.security_answer": "Güvenlik cevabı",
+  "auth.new_password": "Yeni şifre",
+  "auth.reset_hint": "Doğum tarihi ve güvenlik cevabınızla şifrenizi yenileyin.",
+  "auth.reset_done": "Şifreniz güncellendi. Giriş yapabilirsiniz.",
+  "auth.back_to_login": "Girişe dön",
+  "auth.failed": "İşlem başarısız",
+  "auth.rate_limited": "Çok fazla hatalı deneme. Lütfen bekleyin.",
+  "auth.unavailable":
+    "Sunucuda kimlik doğrulama yapılandırılmamış (JARVIS_JWT_SECRET). Yerelde giriş yapmadan devam edebilirsiniz.",
+  "auth.session_expired": "Oturumunuz sona erdi, lütfen tekrar giriş yapın.",
+
+  // Misafir modu (Prompt 2)
+  "guest.banner": "Misafir modundasınız, sohbetler kaydedilmez.",
+  "guest.blocked": "Misafir modunda kullanılamaz",
+  "guest.exit": "Misafir modundan çık",
+
+  // Konuşma modları (Prompt 3)
+  "settings.mode": "Konuşma modu",
+  "mode.formal": "Resmi",
+  "mode.formal_desc": "Profesyonel, toplantı dili.",
+  "mode.casual": "Arkadaş",
+  "mode.casual_desc": "Samimi, espri anlayışlı.",
+  "mode.adaptive": "Duruma göre",
+  "mode.adaptive_desc": "Bilgi sunarken resmi, sohbette samimi.",
+
+  // Tema (Prompt 0/4)
+  "theme.light": "Açık",
+  "theme.dark": "Koyu",
+  "theme.custom": "Özel",
+  "settings.custom_palette": "Özel palet",
+  "settings.custom_accent": "Vurgu rengi",
+  "settings.custom_bg": "Arka plan rengi",
+
+  // Hava durumu (konum)
+  "weather.location": "Konumumu kullan",
+  "weather.location_denied": "Konum izni verilmedi; kayıtlı şehir kullanılıyor.",
 };
 
 const en: Dict = {
@@ -174,6 +225,52 @@ const en: Dict = {
   "pair.remove_failed": "Could not remove device",
   "pair.last_seen": "last seen",
   "pair.device": "device",
+  "pair.enter_pin": "Enter PIN manually",
+  "pair.continue_guest": "Continue as guest",
+
+  "auth.title": "Sign in to JARVIS",
+  "auth.subtitle": "Sign in to your account or create a new one.",
+  "auth.login": "Sign in",
+  "auth.register": "Create account",
+  "auth.forgot": "Forgot password",
+  "auth.logout": "Sign out",
+  "auth.first_name": "First name",
+  "auth.last_name": "Last name",
+  "auth.birth_date": "Birth date (YYYY-MM-DD)",
+  "auth.password": "Password (min 8 chars)",
+  "auth.security_question": "Security question",
+  "auth.security_answer": "Security answer",
+  "auth.new_password": "New password",
+  "auth.reset_hint": "Reset your password with your birth date and security answer.",
+  "auth.reset_done": "Password updated. You can sign in now.",
+  "auth.back_to_login": "Back to sign in",
+  "auth.failed": "Request failed",
+  "auth.rate_limited": "Too many failed attempts. Please wait.",
+  "auth.unavailable":
+    "Authentication is not configured on the server (JARVIS_JWT_SECRET). You can continue locally without signing in.",
+  "auth.session_expired": "Your session expired, please sign in again.",
+
+  "guest.banner": "You are in guest mode; chats are not saved.",
+  "guest.blocked": "Not available in guest mode",
+  "guest.exit": "Leave guest mode",
+
+  "settings.mode": "Conversation mode",
+  "mode.formal": "Formal",
+  "mode.formal_desc": "Professional, meeting language.",
+  "mode.casual": "Casual",
+  "mode.casual_desc": "Friendly and humorous.",
+  "mode.adaptive": "Adaptive",
+  "mode.adaptive_desc": "Formal when presenting facts, casual in conversation.",
+
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.custom": "Custom",
+  "settings.custom_palette": "Custom palette",
+  "settings.custom_accent": "Accent color",
+  "settings.custom_bg": "Background color",
+
+  "weather.location": "Use my location",
+  "weather.location_denied": "Location permission denied; using saved city.",
 };
 
 const DICTS: Record<Lang, Dict> = { tr, en };

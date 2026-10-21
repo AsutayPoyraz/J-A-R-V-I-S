@@ -16,12 +16,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from . import auth
 from .relay_client import RelayClient, wake_via_node
 from .api import (
+    routes_auth,
     routes_camera,
     routes_chat,
     routes_conversation,
     routes_pair,
+    routes_session,
     routes_settings,
     routes_system,
     routes_voice,
@@ -133,15 +136,61 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Device-Token", "X-Client-ID"],
+        allow_headers=[
+            "Content-Type",
+            "X-Device-Token",
+            "X-Client-ID",
+            "Authorization",
+            "Accept-Language",
+        ],
         allow_credentials=False,
     )
+
+    # ── Kimlik doğrulama (Prompt 1): JWT taşıyan isteklerde request.state.user.
+    #    JARVIS_JWT_SECRET boşsa tokenlar yok sayılır; uçlar 503 döner.
+    auth_ready = auth.auth_available()
+    if not auth_ready:
+        logger.warning(
+            "JARVIS_JWT_SECRET tanımlı değil — /api/auth/* uçları 503 döner. "
+            "Kalıcı oturum için .env'e güçlü bir değer ekleyin."
+        )
+
+    @app.middleware("http")
+    async def _attach_user(request: Request, call_next):
+        if auth_ready:
+            token = auth.bearer_of(request)
+            if token:
+                try:
+                    claims = auth.decode_token(token, expected_type="access")
+                    user = database.get_user_by_id(str(claims.get("sub") or ""))
+                    if user:
+                        request.state.user = user
+                except auth.AuthError:
+                    # Geçersiz/süresi dolmuş token → kimliksiz istek olarak devam.
+                    pass
+        return await call_next(request)
 
     # Bölüm A (madde 7): her isteğe kararlı veri sahipliği (owner) etiketi.
     # Sohbet/ayarlar bu etikete göre kullanıcı bazında izole edilir.
     @app.middleware("http")
     async def _attach_owner(request: Request, call_next):
         request.state.owner = security.request_owner(request)
+        return await call_next(request)
+
+    # Prompt 2: misafir kapısı (allow-list). Misafir (kimliksiz uzak istemci)
+    # yalnızca sohbet/sağlık/auth/eşleştirme/oturum uçlarını kullanabilir.
+    from .api import guards as guest_guard
+
+    @app.middleware("http")
+    async def _guest_guard(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api") and not path.startswith(
+            guest_guard.GUEST_ALLOWED_PREFIXES
+        ):
+            if security.is_guest(request):
+                return JSONResponse(
+                    {"detail": guest_guard.GUEST_DENIED_MESSAGE}, status_code=403
+                )
         return await call_next(request)
 
     # ── Cihaz güvenliği (Faz 2): loopback dışı istekler eşleşmiş cihazdan
@@ -208,6 +257,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_reminders.router)
     app.include_router(routes_files.router)
     app.include_router(routes_pair.router)
+    app.include_router(routes_auth.router)
+    app.include_router(routes_session.router)
     app.include_router(routes_integrations.router)
     app.include_router(routes_smart_home.router)
     app.include_router(ws_module.router)

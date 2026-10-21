@@ -54,6 +54,8 @@ export interface WeatherInfo {
   wind_speed?: number;
   description?: string;
   icon?: string;
+  lat?: number;
+  lon?: number;
   fetched_at: string;
 }
 
@@ -85,9 +87,24 @@ export interface VoiceStatus {
   error?: string | null;
 }
 
-export type BackgroundColor = "red" | "green" | "blue" | "maroon";
+export type BackgroundColor =
+  | "maroon"
+  | "light"
+  | "dark"
+  | "custom"
+  | "red"
+  | "green"
+  | "blue";
 export type Language = "tr" | "en";
 export type ChatPanelPosition = "right" | "center";
+export type ConversationMode = "formal" | "casual" | "adaptive";
+
+/** Özel palet: CSS değişkenlerine yazılan değerler ("r g b" | "#hex"). */
+export interface CustomPalette {
+  accent?: string;
+  accent_soft?: string;
+  bg_page?: string;
+}
 
 export interface AppSettings {
   background_color: BackgroundColor;
@@ -96,7 +113,14 @@ export interface AppSettings {
   language: Language;
   /** Madde 32: sohbet paneli konumu (right/center). */
   chat_panel_position: ChatPanelPosition;
+  /** Prompt 3: konuşma modu (formal/casual/adaptive). */
+  conversation_mode: ConversationMode;
+  /** Prompt 0/4: özel tema paleti. */
+  custom_palette: CustomPalette | null;
+  /** Prompt 6: kritik komutlarda 2FA. */
+  twofa_enabled?: boolean;
   allowed_background_colors: BackgroundColor[];
+  allowed_conversation_modes?: ConversationMode[];
 }
 
 /** Faz 4: hatırlatıcı — reminders/service.py şemasıyla uyumlu. */

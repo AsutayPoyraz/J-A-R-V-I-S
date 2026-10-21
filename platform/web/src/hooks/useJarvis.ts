@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { clientId, deviceToken } from "../api/client";
 import { getLang, setLang as persistLang, t } from "../i18n";
+import { isGuestMode } from "../components/LoginGate";
 import type {
   AppSettings,
   CameraStatus,
@@ -147,22 +148,50 @@ export function useJarvis() {
   }, []);
 
   useEffect(() => {
-    api
-      .conversation()
-      .then((r) => setMessages(r.messages.slice(-MAX_CLIENT_MESSAGES)))
-      .catch(() => {});
+    // Misafir: geçmiş çağrılmaz (403) — boş sohbetle başlanır.
+    if (!isGuestMode()) {
+      api
+        .conversation()
+        .then((r) => setMessages(r.messages.slice(-MAX_CLIENT_MESSAGES)))
+        .catch(() => {});
+    }
     api
       .settings()
       .then((s) => setSettings(s))
       .catch(() => {});
   }, []);
 
-  // Tema rengini <html data-bg> uygula
+  // Tema rengini <html data-bg> uygula (Prompt 0/4: light/dark/custom dahil).
+  // localStorage'da son tercih tutulur → index.html'deki inline script FOUC'u önler.
   useEffect(() => {
-    if (settings?.background_color) {
-      document.documentElement.dataset.bg = settings.background_color;
+    if (!settings?.background_color) return;
+    const root = document.documentElement;
+    root.classList.add("theme-transition");
+    root.dataset.bg = settings.background_color;
+    try {
+      localStorage.setItem("jarvis.theme", settings.background_color);
+    } catch {
+      /* gizli mod */
     }
-  }, [settings?.background_color]);
+    // Özel palet değişkenlerini uygula / temizle.
+    const palette = settings.custom_palette;
+    if (settings.background_color === "custom" && palette) {
+      if (palette.accent) root.style.setProperty("--accent-rgb", palette.accent);
+      if (palette.accent_soft) root.style.setProperty("--accent-soft-rgb", palette.accent_soft);
+      if (palette.bg_page) root.style.setProperty("--bg-page", palette.bg_page);
+      try {
+        localStorage.setItem("jarvis.palette", JSON.stringify(palette));
+      } catch {
+        /* gizli mod */
+      }
+    } else {
+      root.style.removeProperty("--accent-rgb");
+      root.style.removeProperty("--accent-soft-rgb");
+      root.style.removeProperty("--bg-page");
+    }
+    const timer = window.setTimeout(() => root.classList.remove("theme-transition"), 300);
+    return () => window.clearTimeout(timer);
+  }, [settings?.background_color, settings?.custom_palette]);
 
   // Madde 32: sohbet paneli konumunu <html data-chat-position> uygula
   useEffect(() => {
@@ -198,9 +227,37 @@ export function useJarvis() {
   }, [online]);
 
   // ── Hava durumu: yükle + 10 dk'da bir yenile ──
+  // Prompt 0 item 6: tarayıcı Geolocation → koordinattan şehir. İzin reddi
+  // veya API yoksa kayıtlı şehir (yoksa backend'de İstanbul) kullanılır.
   const refreshWeather = useCallback(async (force = false) => {
+    let coords: { lat: number; lon: number } | undefined;
     try {
-      setWeather(await api.weather(force));
+      if (
+        localStorage.getItem("jarvis.geo_enabled") !== "0" &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation &&
+        localStorage.getItem("jarvis.geo_denied") !== "1"
+      ) {
+        coords = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            () => {
+              try {
+                localStorage.setItem("jarvis.geo_denied", "1");
+              } catch {
+                /* yok */
+              }
+              resolve(undefined);
+            },
+            { timeout: 6000, maximumAge: 15 * 60 * 1000, enableHighAccuracy: false }
+          );
+        });
+      }
+    } catch {
+      coords = undefined;
+    }
+    try {
+      setWeather(await api.weather(force, coords));
     } catch {
       setWeather({ available: false, reason: "backend_offline", fetched_at: "" });
     }
@@ -248,6 +305,7 @@ export function useJarvis() {
 
   const clearConversation = useCallback(async () => {
     setMessages([]);
+    if (isGuestMode()) return; // misafirde kalıcı kayıt yok
     try {
       await api.clearConversation();
     } catch {
@@ -256,6 +314,9 @@ export function useJarvis() {
   }, []);
 
   const reloadConversation = useCallback(async () => {
+    // Prompt 2: misafir geçmişi ÇAĞIRMAZ; sohbet yalnızca bellekte tutulur
+    // ve sayfa açılışında boş başlar (yenileme = sıfırlama).
+    if (isGuestMode()) return;
     try {
       const r = await api.conversation();
       setMessages(r.messages.slice(-MAX_CLIENT_MESSAGES));
@@ -271,6 +332,8 @@ export function useJarvis() {
       city?: string;
       language?: Language;
       chat_panel_position?: AppSettings["chat_panel_position"];
+      conversation_mode?: AppSettings["conversation_mode"];
+      custom_palette?: Record<string, string>;
     }) => {
       const updated = await api.updateSettings(patch);
       setSettings(updated);

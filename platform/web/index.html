@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr" data-bg="blue">
+<html lang="tr" data-bg="maroon">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -8,6 +8,26 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>J.A.R.V.I.S</title>
+    <script>
+      // FOUC önleme: son tema tercihini ilk boyamadan önce uygula.
+      // Varsayılan bordo; backend ayarları açılışta bunu günceller.
+      (function () {
+        try {
+          var t = localStorage.getItem("jarvis.theme") || "maroon";
+          document.documentElement.dataset.bg = t;
+          var p = localStorage.getItem("jarvis.palette");
+          if (t === "custom" && p) {
+            var o = JSON.parse(p);
+            var root = document.documentElement.style;
+            if (o.accent) root.setProperty("--accent-rgb", o.accent);
+            if (o.accent_soft) root.setProperty("--accent-soft-rgb", o.accent_soft);
+            if (o.bg_page) root.setProperty("--bg-page", o.bg_page);
+          }
+        } catch (e) {
+          document.documentElement.dataset.bg = "maroon";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

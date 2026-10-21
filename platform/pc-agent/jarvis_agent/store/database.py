@@ -68,6 +68,19 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name ON users (first_name_lower, last_name_lower);
+
+-- Bölüm B: başarısız giriş/kurtarma denemeleri (yeniden başlatmada sıfırlanmaz).
+CREATE TABLE IF NOT EXISTS login_attempts (
+    lock_key TEXT PRIMARY KEY,
+    fails INTEGER NOT NULL DEFAULT 0,
+    blocked_until REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti TEXT PRIMARY KEY,
+    expires_at REAL NOT NULL
+);
 """
 
 
@@ -99,6 +112,7 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_messages_owner_id_id "
             "ON messages (owner_id, id)"
         )
+        _migrate_user_settings_columns(conn)
         for key, value in _default_settings().items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
@@ -106,6 +120,25 @@ def init_db() -> None:
             )
         # Eski global ayarları (renk/şehir) bir kez 'local' sahibine taşı.
         _migrate_legacy_settings(conn)
+
+
+def _migrate_user_settings_columns(conn: sqlite3.Connection) -> None:
+    """Eksik sütunları ekler (idempotent).
+
+    - conversation_mode: Prompt 3 — konuşma modu (varsayılan 'adaptive')
+    - custom_palette: Prompt 0/4 — özel tema paleti (JSON metni)
+    - twofa_enabled: Prompt 6 — kritik komutlarda 2FA tercihi
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(user_settings)")}
+    additions = (
+        ("conversation_mode", "TEXT NOT NULL DEFAULT 'adaptive'"),
+        ("custom_palette", "TEXT"),
+        ("twofa_enabled", "INTEGER NOT NULL DEFAULT 1"),
+    )
+    for name, ddl in additions:
+        if name not in columns:
+            conn.execute(f"ALTER TABLE user_settings ADD COLUMN {name} {ddl}")
+
 
 
 def _default_settings() -> dict[str, str]:
@@ -154,27 +187,43 @@ def increment_setting_int(key: str, by: int = 1) -> int:
 
 # ── Bölüm A: kullanıcıya özel ayarlar (owner bazlı) ──────────────────────────
 
-_USER_SETTINGS_COLS = ("theme", "chat_position", "language", "city")
+_USER_SETTINGS_COLS = (
+    "theme",
+    "chat_position",
+    "language",
+    "city",
+    "conversation_mode",
+    "custom_palette",
+    "twofa_enabled",
+)
 
 
-def _owner_row(owner_id: str) -> dict[str, Any]:
-    """owner satırını getirir; yoksa varsayılanlarla döndürür (yazmaz)."""
-    with closing(connect()) as conn:
-        row = conn.execute(
-            "SELECT owner_id, theme, chat_position, language, city, updated_at "
-            "FROM user_settings WHERE owner_id = ?",
-            (owner_id,),
-        ).fetchone()
-    if row:
-        return dict(row)
+def _settings_defaults(owner_id: str) -> dict[str, Any]:
     return {
         "owner_id": owner_id,
         "theme": config.DEFAULT_BG_COLOR,
         "chat_position": config.DEFAULT_CHAT_POSITION,
         "language": config.DEFAULT_LANGUAGE,
         "city": config.DEFAULT_CITY or None,
+        "conversation_mode": config.DEFAULT_CONVERSATION_MODE,
+        "custom_palette": None,
+        "twofa_enabled": 1,
         "updated_at": None,
     }
+
+
+def _owner_row(owner_id: str) -> dict[str, Any]:
+    """owner satırını getirir; yoksa varsayılanlarla döndürür (yazmaz)."""
+    with closing(connect()) as conn:
+        row = conn.execute(
+            "SELECT owner_id, theme, chat_position, language, city, "
+            "conversation_mode, custom_palette, twofa_enabled, updated_at "
+            "FROM user_settings WHERE owner_id = ?",
+            (owner_id,),
+        ).fetchone()
+    if row:
+        return dict(row)
+    return _settings_defaults(owner_id)
 
 
 def is_guest(owner_id: str) -> bool:
@@ -186,14 +235,7 @@ def get_user_settings(owner_id: str) -> dict[str, Any]:
     """Sahibinin ayarlarını döndürür; misafirler her zaman varsayılanı görür."""
     row = _owner_row(owner_id)
     if is_guest(owner_id):
-        return {
-            "owner_id": owner_id,
-            "theme": config.DEFAULT_BG_COLOR,
-            "chat_position": config.DEFAULT_CHAT_POSITION,
-            "language": config.DEFAULT_LANGUAGE,
-            "city": config.DEFAULT_CITY or None,
-            "updated_at": None,
-        }
+        return _settings_defaults(owner_id)
     return row
 
 

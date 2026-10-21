@@ -31,7 +31,11 @@ LOG_DIR = APP_DATA_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "agent.log"
 
-ALLOWED_BG_COLORS = ("red", "green", "blue", "maroon")
+ALLOWED_BG_COLORS = ("maroon", "light", "dark", "custom", "red", "green", "blue")
+# Özel palet anahtarları (Prompt 0/4): yalnız bu anahtarlar DB'ye yazılır.
+ALLOWED_PALETTE_KEYS = ("accent", "accent_soft", "bg_page")
+# Prompt 3: konuşma modları
+ALLOWED_CONVERSATION_MODES = ("formal", "casual", "adaptive")
 
 # Kullanıcı ayarları için izinli değerler (kullanıcıya özel ayarlar DB'de tutulur).
 ALLOWED_LANGUAGES = ("tr", "en")
@@ -90,8 +94,8 @@ BIND_HOST = env("JARVIS_BIND", "127.0.0.1")
 BIND_PORT = int(env("JARVIS_PORT", "8000"))
 
 # ── Kimlik doğrulama (Bölüm B — madde 5, 16) ────────────────────────────────
-# JWT secret .env'den okunur; koda ASLA gömülmez. Boşsa her başlangıçta rastgele
-# üretilir (token'lar restart'ta düşer — kalıcı oturum için .env'e yazın).
+# JWT secret yalnızca .env'den okunur; koda ASLA gömülmez ve güvensiz bir
+# varsayılan ÜRETİLMEZ. Boşsa auth uçları 503 döner (bkz. auth.auth_available).
 AUTH_SECRET = env("JARVIS_JWT_SECRET")
 ACCESS_TOKEN_TTL_SECONDS = 15 * 60            # madde 16: access 15 dk
 REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600     # madde 16: refresh 7 gün
@@ -100,6 +104,9 @@ BCRYPT_ROUNDS = 12                            # madde 16: bcrypt 12 round
 LOGIN_MAX_FAILURES = 5                        # madde 16: 5 hatalı girişte
 LOGIN_BLOCK_SECONDS = 15 * 60                 # 15 dakika engelleme
 DEFAULT_LANGUAGE = env("JARVIS_DEFAULT_LANGUAGE", "tr")
+DEFAULT_CONVERSATION_MODE = env("JARVIS_DEFAULT_CONVERSATION_MODE", "adaptive")
+if DEFAULT_CONVERSATION_MODE not in ALLOWED_CONVERSATION_MODES:
+    DEFAULT_CONVERSATION_MODE = "adaptive"
 
 
 # ── LLM sağlayıcısı ──────────────────────────────────────────────────────────

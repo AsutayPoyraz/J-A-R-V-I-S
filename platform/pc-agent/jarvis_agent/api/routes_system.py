@@ -128,12 +128,17 @@ def system_stats(request: Request) -> dict:
 
 
 @router.get("/api/weather")
-def get_weather(request: Request, refresh: bool = False) -> dict:
+def get_weather(
+    request: Request, refresh: bool = False, lat: float | None = None, lon: float | None = None
+) -> dict:
     # Bölüm A: şehir ve dil sahibine özel user_settings'ten okunur.
     owner = getattr(request.state, "owner", "local")
     row = database.get_user_settings(owner)
-    city = (str(row.get("city") or "") or config.DEFAULT_CITY or "").strip()
     lang = str(row.get("language") or "") or config.DEFAULT_LANGUAGE
+    if lat is not None and lon is not None:
+        # Tarayıcı konumu (Prompt 0 item 6): koordinattan şehir bulunur.
+        return weather_module.get_by_coords(lat, lon, force=refresh, lang=lang)
+    city = (str(row.get("city") or "") or config.DEFAULT_CITY or "").strip()
     return weather_module.get(city, force=refresh, lang=lang)
 
 

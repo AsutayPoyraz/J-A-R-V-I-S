@@ -15,7 +15,58 @@ import pathlib
 from .. import config
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\- \u00C0-\u024F\u0600-\u06FF]+")
-MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+MAX_UPLOAD_BYTES = int(config.env("JARVIS_MAX_UPLOAD_MB", "50")) * 1024 * 1024  # varsayılan 50 MB
+
+# Yürütülebilir/tehlikeli uzantılar reddedilir (Prompt 0 item 7).
+FORBIDDEN_EXTENSIONS = frozenset(
+    {
+        ".exe",
+        ".dll",
+        ".bat",
+        ".cmd",
+        ".msi",
+        ".vbs",
+        ".ps1",
+        ".scr",
+        ".com",
+        ".jar",
+        ".sh",
+    }
+)
+
+# İzinli uzantılar (allow-list): belge, görsel, ses, video, arşiv, veri.
+ALLOWED_EXTENSIONS = frozenset(
+    {
+        ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".csv", ".json", ".xml", ".html", ".css", ".js", ".ts", ".py", ".log",
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".heic",
+        ".mp3", ".wav", ".ogg", ".m4a", ".flac", ".mp4", ".mov", ".mkv", ".webm",
+        ".zip", ".rar", ".7z", ".tar", ".gz",
+    }
+)
+
+
+def extension_of(name: str) -> str:
+    return pathlib.Path(name or "").suffix.lower()
+
+
+def check_extension(name: str) -> None:
+    """Yasak/izin verilmeyen uzantıyı ValueError ile reddeder."""
+    ext = extension_of(name)
+    if ext in FORBIDDEN_EXTENSIONS:
+        raise ValueError(f"'{ext}' uzantılı dosyalar güvenlik nedeniyle kabul edilmez.")
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError("Bu dosya türüne izin verilmiyor.")
+
+
+def uploads_dir() -> pathlib.Path:
+    """Telefondan gelen dosyaların kaydedildiği klasör (varsayılan: Downloads)."""
+    raw = config.env("JARVIS_UPLOADS_DIR", "")
+    if not raw:
+        raw = os.path.join(os.path.expanduser("~"), "Downloads")
+    path = pathlib.Path(raw)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def shared_dir() -> pathlib.Path:
@@ -67,13 +118,18 @@ def read_file(name: str) -> bytes:
     return path.read_bytes()
 
 
-def write_file(name: str, data: bytes) -> dict:
+def write_file(name: str, data: bytes, target_dir: pathlib.Path | None = None) -> dict:
     safe = sanitize_name(name)
-    path = _resolve(safe)
+    check_extension(safe)
+    base = (target_dir or uploads_dir()).resolve()
+    base.mkdir(parents=True, exist_ok=True)
     if len(data) > MAX_UPLOAD_BYTES:
-        raise ValueError("Dosya 100 MB sınırını aşıyor.")
+        raise ValueError(f"Dosya {MAX_UPLOAD_BYTES // (1024 * 1024)} MB sınırını aşıyor.")
+    path = (base / safe).resolve()
+    if not path.is_relative_to(base):
+        raise PermissionError("Bu yol hedef klasörün dışına çıkıyor.")
     path.write_bytes(data)
-    return {"name": path.name, "size": len(data)}
+    return {"name": path.name, "size": len(data), "directory": str(base)}
 
 
 def stage_from_pc(source_path: str) -> dict:
@@ -95,11 +151,16 @@ def stage_from_pc(source_path: str) -> dict:
     if not src.is_file():
         raise FileNotFoundError(f"'{src.name}' bulunamadı.")
     if src.stat().st_size > MAX_UPLOAD_BYTES:
-        raise ValueError("Dosya 100 MB sınırını aşıyor.")
+        raise ValueError(f"Dosya {MAX_UPLOAD_BYTES // (1024 * 1024)} MB sınırını aşıyor.")
     data = src.read_bytes()
-    result = write_file(src.name, data)
+    result = write_file(src.name, data, target_dir=_resolve_staging())
     return {**result, "source": str(src)}
 
 
 def available() -> bool:
     return True
+
+
+def _resolve_staging() -> pathlib.Path:
+    """LLM send_file aracının kopyaladığı yer: paylaşım klasörü."""
+    return shared_dir()

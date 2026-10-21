@@ -174,6 +174,39 @@ def is_loopback(host: str) -> bool:
     return host in ("127.0.0.1", "::1", "localhost", "testclient")
 
 
+def require_user(request: Any) -> dict:
+    """Korumalı uçlar için bağımlılık: geçerli access token sahibi olmalı.
+
+    Loopback (yerel masaüstü) istisnası: PC'nin kendi arayüzü giriş yapmadan
+    çalışmaya devam eder (owner='local'). Uzak istemciler 401 alır.
+    """
+    from fastapi import HTTPException
+
+    user = getattr(getattr(request, "state", None), "user", None)
+    if user:
+        return user
+    if is_loopback(_client_host(request)):
+        return {"id": "local", "first_name": "Local", "last_name": ""}
+    raise HTTPException(status_code=401, detail="Giriş yapmanız gerekiyor.")
+
+
+_USER_TOKEN_DIGEST = "user_access_v1"  # sabit etiket (yalnızca kimlik ayrımı için)
+
+
+def is_user_token_valid(token: str) -> bool:
+    """Access token'ı doğrular; geçerliyse True."""
+    if not token:
+        return False
+    # Döngüsel importu önlemek için geç import.
+    from . import auth
+
+    try:
+        auth.decode_token(token, expected_type="access")
+    except auth.AuthError:
+        return False
+    return True
+
+
 def _client_owner(value: Any) -> Optional[str]:
     client_id = str(value or "").strip()
     if not _CLIENT_ID_RE.fullmatch(client_id):
@@ -181,14 +214,25 @@ def _client_owner(value: Any) -> Optional[str]:
     return f"client:{client_id}"
 
 
+def _user_owner(request: Any) -> Optional[str]:
+    """JWT ile doğrulanmış kullanıcı → 'user:<id>' (en yüksek öncelik)."""
+    user = getattr(getattr(request, "state", None), "user", None)
+    user_id = str((user or {}).get("id") or "").strip() if user else ""
+    return f"user:{user_id}" if user_id else None
+
+
 def request_owner(request: Any) -> str:
     """Return the stable data partition for an authenticated request.
 
+    Priority (Prompt 1): user:<id> > device:<id> > client:<id> > local.
     Paired devices are isolated by device id. Local desktop traffic uses one
     explicit local partition because it has no remote device identity.
     Unauthenticated remote requests are guests ("guest:*", madde 6): their
     settings and chat are never persisted.
     """
+    user_owner = _user_owner(request)
+    if user_owner:
+        return user_owner
     device = getattr(getattr(request, "state", None), "device", None)
     device_id = str((device or {}).get("device_id") or "").strip()
     if device_id:
@@ -215,10 +259,12 @@ def _client_host(request: Any) -> str:
 def is_guest(request: Any) -> bool:
     """Kimliği doğrulanamayan uzak istek = misafir (Bölüm A/B kuralı).
 
-    Misafir: loopback dışından gelir, eşleşmiş cihazı ve geçerli bir
-    client_id'si yoktur. Sohbeti ve ayarları kalıcı olarak KAYIT EDİLMEZ.
+    Misafir: loopback dışından gelir, giriş yapmamış, eşleşmiş cihazı ve
+    geçerli bir client_id'si yoktur. Sohbeti ve ayarları KAYIT EDİLMEZ.
     """
     if is_loopback(_client_host(request)):
+        return False
+    if _user_owner(request):
         return False
     if getattr(getattr(request, "state", None), "device", None):
         return False
