@@ -283,7 +283,6 @@ const en: Dict = {
   "mode.casual": "Casual",
   "mode.casual_desc": "Friendly and humorous.",
   "mode.adaptive": "Adaptive",
-  "settings.tts_rate_hint": "0.5x – 2.0x; rate change requires ffmpeg.",
 
   // Bölüm E: productivity (item 23) + memory bank (item 18)
   "productivity.title": "Productivity",
