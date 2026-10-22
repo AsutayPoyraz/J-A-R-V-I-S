@@ -40,10 +40,12 @@ ALLOWED_CONVERSATION_MODES = ("formal", "casual", "adaptive")
 # Kullanıcı ayarları için izinli değerler (kullanıcıya özel ayarlar DB'de tutulur).
 ALLOWED_LANGUAGES = ("tr", "en")
 ALLOWED_CHAT_POSITIONS = ("right", "center")
+
 # Madde 14: TTS ses dilleri (gTTS desteğiyle sınırlı); hız 0.5-2.0x.
 ALLOWED_TTS_VOICES = ("tr", "en")
 TTS_MIN_RATE = 0.5
 TTS_MAX_RATE = 2.0
+# Not: GUI otomasyonu/vision ayarları env() tanımından sonra okunur (bkz. altta).
 
 # Şablon dosyalarındaki sahte anahtar değerleri geçersiz sayılır.
 _PLACEHOLDER_PREFIXES = ("your_", "xxx", "changeme")
@@ -88,6 +90,12 @@ def env(name: str, default: str = "") -> str:
         return default
     return value
 
+
+# ── Bölüm E: otomasyon & ekran analizi (madde 9) ────────────────────────────
+# Klavye/fare otomasyonu varsayılan KAPALI; bilinçli olarak açılmalıdır.
+GUI_AUTOMATION = env("JARVIS_GUI_AUTOMATION", "0").lower() in ("1", "true", "yes")
+# Vision modeli: boşsa sağlayıcının aktif modeli kullanılır (vision desteklemesi gerekir).
+VISION_MODEL = env("JARVIS_VISION_MODEL")
 
 # ── Sunucu bağlantısı ────────────────────────────────────────────────────────
 # Varsayılan 127.0.0.1: yalnızca bu makine. Yerel ağdan (telefon) erişmek için

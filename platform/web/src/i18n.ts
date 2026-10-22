@@ -152,6 +152,24 @@ const tr: Dict = {
   "settings.tts_voice": "Konuşma sesi",
   "settings.tts_rate": "Konuşma hızı",
   "settings.tts_rate_hint": "0.5x – 2.0x arası; hız değişimi için ffmpeg gerekir.",
+  // Bölüm E: üretkenlik (madde 23) + hafıza (madde 18)
+  "productivity.title": "Üretkenlik",
+  "productivity.tab_notes": "Notlar",
+  "productivity.tab_todos": "Yapılacaklar",
+  "productivity.tab_memory": "Hafıza",
+  "productivity.note_title": "Başlık",
+  "productivity.note_content": "İçerik (isteğe bağlı)",
+  "productivity.add": "Ekle",
+  "productivity.empty_notes": "Not yok.",
+  "productivity.empty_todos": "Yapılacak yok.",
+  "productivity.empty_memory": "Kalıcı bilgi yok.",
+  "productivity.memory_placeholder": "Kalıcı hatırlamamı istediğin bilgi",
+  "productivity.todo_placeholder": "Yeni yapılacak",
+  "productivity.guest_locked": "Misafir modunda kullanılamaz.",
+  // Bölüm E (madde 9): ekran analizi
+  "agent.screen_analyze": "Ekranı analiz et",
+  "agent.screen_analyzing": "Analiz ediliyor...",
+  "agent.screen_failed": "Ekran analizi şu an kullanılamıyor.",
 };
 
 const en: Dict = {
@@ -265,6 +283,27 @@ const en: Dict = {
   "mode.casual": "Casual",
   "mode.casual_desc": "Friendly and humorous.",
   "mode.adaptive": "Adaptive",
+  "settings.tts_rate_hint": "0.5x – 2.0x; rate change requires ffmpeg.",
+
+  // Bölüm E: productivity (item 23) + memory bank (item 18)
+  "productivity.title": "Productivity",
+  "productivity.tab_notes": "Notes",
+  "productivity.tab_todos": "To-dos",
+  "productivity.tab_memory": "Memory",
+  "productivity.note_title": "Title",
+  "productivity.note_content": "Content (optional)",
+  "productivity.add": "Add",
+  "productivity.empty_notes": "No notes.",
+  "productivity.empty_todos": "No to-dos.",
+  "productivity.empty_memory": "No saved memories.",
+  "productivity.memory_placeholder": "Something you want me to remember",
+  "productivity.todo_placeholder": "New to-do",
+  "productivity.guest_locked": "Not available in guest mode.",
+  // Bölüm E (item 9): screen analysis
+  "agent.screen_analyze": "Analyze my screen",
+  "agent.screen_analyzing": "Analyzing...",
+  "agent.screen_failed": "Screen analysis is unavailable right now.",
+
   "mode.adaptive_desc": "Formal when presenting facts, casual in conversation.",
 
   "theme.light": "Light",

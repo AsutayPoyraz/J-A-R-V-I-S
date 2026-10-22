@@ -163,3 +163,24 @@ export interface SmartHomeStatus {
   connected: boolean;
   reason?: string;
 }
+
+/** Bölüm E: notlar / yapılacaklar / Memory Bank (madde 18, 23). */
+export interface NoteItem {
+  id: number;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+export interface TodoItem {
+  id: number;
+  title: string;
+  done: number;
+  created_at: string;
+}
+
+export interface MemoryItem {
+  id: number;
+  content: string;
+  created_at: string;
+}

@@ -81,6 +81,42 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
     jti TEXT PRIMARY KEY,
     expires_at REAL NOT NULL
 );
+
+-- Bölüm E (madde 18): Memory Bank — kullanıcıya özel kalıcı bilgiler
+CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories (owner_id, id);
+
+-- Bölüm E (madde 22): özel komutlar — "kahve zamanı" gibi kısayollar
+CREATE TABLE IF NOT EXISTS custom_commands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    phrase TEXT NOT NULL,
+    action_type TEXT NOT NULL CHECK (action_type IN ('reply_text', 'open_app')),
+    action_payload TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE (owner_id, phrase)
+);
+
+-- Bölüm E (madde 23): üretkenlik — notlar ve yapılacaklar
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -282,6 +318,210 @@ def update_user_settings(owner_id: str, patch: dict[str, Any]) -> dict[str, Any]
             )
     return _owner_row(owner_id)
 
+
+# ── Bölüm E: Memory Bank ve özel komutlar (madde 18, 22) ─────────────────────
+
+def add_memory(owner_id: str, content: str) -> int | None:
+    """Madde 18: kalıcı bilgi yazar; misafirse yazmaz (None döner)."""
+    content = (content or "").strip()[:500]
+    if is_guest(owner_id) or not content:
+        return None
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "INSERT INTO memories (owner_id, content, created_at) VALUES (?, ?, ?)",
+            (owner_id, content, _now()),
+        )
+    return int(cur.lastrowid or 0)
+
+
+def list_memories(owner_id: str, limit: int = 20, query: str = "") -> list[dict[str, Any]]:
+    """Sahibinin hatırlamalarını (en yeni önce) döndürür; misafirde boş."""
+    if is_guest(owner_id):
+        return []
+    limit = max(1, min(int(limit), 100))
+    sql = "SELECT id, content, created_at FROM memories WHERE owner_id = ?"
+    params: list[Any] = [owner_id]
+    if query.strip():
+        sql += " AND content LIKE ?"
+        params.append(f"%{query.strip()[:100]}%")
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with closing(connect()) as conn:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def delete_memory(owner_id: str, memory_id: int) -> bool:
+    if is_guest(owner_id):
+        return False
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "DELETE FROM memories WHERE id = ? AND owner_id = ?",
+            (int(memory_id), owner_id),
+        )
+    return cur.rowcount > 0
+
+
+def add_custom_command(
+    owner_id: str, phrase: str, action_type: str, action_payload: str = ""
+) -> int | None:
+    """Madde 22: özel komut kaydeder; misafir/kısa ifade/hatalı tür → None."""
+    phrase = (phrase or "").strip().lower()[:60]
+    if is_guest(owner_id) or len(phrase) < 2:
+        return None
+    if action_type not in ("reply_text", "open_app"):
+        return None
+    with _write_lock, closing(connect()) as conn, conn:
+        try:
+            cur = conn.execute(
+                "INSERT INTO custom_commands (owner_id, phrase, action_type, "
+                "action_payload, created_at) VALUES (?, ?, ?, ?, ?)",
+                (owner_id, phrase, action_type, (action_payload or "").strip()[:500], _now()),
+            )
+        except sqlite3.IntegrityError:  # aynı ifade iki kez
+            return None
+    return int(cur.lastrowid or 0)
+
+
+def list_custom_commands(owner_id: str) -> list[dict[str, Any]]:
+    if is_guest(owner_id):
+        return []
+    with closing(connect()) as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, phrase, action_type, action_payload, created_at "
+                "FROM custom_commands WHERE owner_id = ? ORDER BY id",
+                (owner_id,),
+            ).fetchall()
+        ]
+
+
+def match_custom_command(owner_id: str, message: str) -> dict[str, Any] | None:
+    """İletiyi özel komut ifadeleriyle (büyük/küçük duyarsız) eşleştirir."""
+    if is_guest(owner_id):
+        return None
+    text = (message or "").strip().lower()
+    if not text:
+        return None
+    with closing(connect()) as conn:
+        row = conn.execute(
+            "SELECT id, phrase, action_type, action_payload FROM custom_commands "
+            "WHERE owner_id = ? AND phrase = ?",
+            (owner_id, text[:60]),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_custom_command(owner_id: str, command_id: int) -> bool:
+    if is_guest(owner_id):
+        return False
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "DELETE FROM custom_commands WHERE id = ? AND owner_id = ?",
+            (int(command_id), owner_id),
+        )
+    return cur.rowcount > 0
+
+# ── Bölüm E: üretkenlik — notlar ve yapılacaklar (madde 23) ──────────────────
+
+def add_note(owner_id: str, title: str, content: str = "") -> int | None:
+    """Madde 23: not yazar; misafirse yazmaz (None döner)."""
+    title = (title or "").strip()[:120]
+    content = (content or "").strip()[:4000]
+    if is_guest(owner_id) or not title:
+        return None
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "INSERT INTO notes (owner_id, title, content, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (owner_id, title, content, _now()),
+        )
+    return int(cur.lastrowid or 0)
+
+
+def list_notes(owner_id: str, limit: int = 50, query: str = "") -> list[dict[str, Any]]:
+    """Sahibinin notlarını (en yeni önce) döndürür; misafirde boş."""
+    if is_guest(owner_id):
+        return []
+    limit = max(1, min(int(limit), 200))
+    sql = "SELECT id, title, content, created_at FROM notes WHERE owner_id = ?"
+    params: list[Any] = [owner_id]
+    if query.strip():
+        sql += " AND (title LIKE ? OR content LIKE ?)"
+        like = f"%{query.strip()[:100]}%"
+        params.extend([like, like])
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with closing(connect()) as conn:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def delete_note(owner_id: str, note_id: int) -> bool:
+    """Sahibine ait değilse False döner (owner izolasyonu)."""
+    if is_guest(owner_id):
+        return False
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "DELETE FROM notes WHERE id = ? AND owner_id = ?",
+            (int(note_id), owner_id),
+        )
+    return cur.rowcount > 0
+
+
+def add_todo(owner_id: str, title: str) -> int | None:
+    """Madde 23: yapılacak ekler; misafirse yazmaz (None döner)."""
+    title = (title or "").strip()[:200]
+    if is_guest(owner_id) or not title:
+        return None
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "INSERT INTO todos (owner_id, title, done, created_at) "
+            "VALUES (?, ?, 0, ?)",
+            (owner_id, title, _now()),
+        )
+    return int(cur.lastrowid or 0)
+
+
+def list_todos(owner_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Yapılacakları (açılanlar önce, sonra en yeni) döndürür; misafirde boş."""
+    if is_guest(owner_id):
+        return []
+    limit = max(1, min(int(limit), 500))
+    with closing(connect()) as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, title, done, created_at FROM todos "
+                "WHERE owner_id = ? ORDER BY done ASC, id DESC LIMIT ?",
+                (owner_id, limit),
+            ).fetchall()
+        ]
+
+
+def set_todo_done(owner_id: str, todo_id: int, done: bool) -> bool:
+    """Yapılacak durumunu değiştirir; sahibine ait değilse False."""
+    if is_guest(owner_id):
+        return False
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "UPDATE todos SET done = ? WHERE id = ? AND owner_id = ?",
+            (1 if done else 0, int(todo_id), owner_id),
+        )
+    return cur.rowcount > 0
+
+
+def delete_todo(owner_id: str, todo_id: int) -> bool:
+    if is_guest(owner_id):
+        return False
+    with _write_lock, closing(connect()) as conn, conn:
+        cur = conn.execute(
+            "DELETE FROM todos WHERE id = ? AND owner_id = ?",
+            (int(todo_id), owner_id),
+        )
+    return cur.rowcount > 0
+
+
+# ── Sohbet geçmişi ───────────────────────────────────────────────────────────
 
 # ── Sohbet geçmişi ───────────────────────────────────────────────────────────
 

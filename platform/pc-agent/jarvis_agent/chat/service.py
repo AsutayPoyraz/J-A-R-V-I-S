@@ -10,6 +10,7 @@ import logging
 from typing import Any, Optional
 
 from .. import config
+from ..core import context as chat_context
 from ..core.stats import StatsMonitor
 from ..llm.provider import ChatProvider, ProviderError
 from ..llm.tools import TOOL_SPECS, execute_tool
@@ -112,12 +113,31 @@ async def run_chat(
     """
     message = (message or "").strip()
 
+    # Madde 18: araçların (save_memory vb.) doğru sahibe yazması için bağlam.
+    chat_context.set_owner(owner_id)
+
     if persist:
         database.add_message("user", message, owner_id=owner_id)
         database.audit("chat.message", detail=f"[{source}] {message[:200]}")
 
+    # Madde 18: Memory Bank — kalıcı kayıtlar sistem bağlamına eklenir.
+    memory_block = ""
+    if persist:
+        try:
+            memories = database.list_memories(owner_id, limit=20)
+        except Exception:  # noqa: BLE001 — hafıza hatası sohbeti bloklamasın
+            memories = []
+        if memories:
+            lines = "\n".join(f"- {m['content']}" for m in memories)
+            memory_block = (
+                "\n\n[Kullanıcı hakkında kalıcı kayıtlar — Memory Bank]\n" + lines
+            )
+
     llm_messages: list[dict] = [
-        {"role": "system", "content": build_system_prompt(language, mode)}
+        {
+            "role": "system",
+            "content": build_system_prompt(language, mode) + memory_block,
+        }
     ]
     if persist:
         for row in database.get_messages(limit=24, owner_id=owner_id):

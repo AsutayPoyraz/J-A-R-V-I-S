@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..chat.service import run_chat
 from ..core import counters
+from ..core import screen as screen_module
 from ..store import database
 from ..voice.textmatch import is_enter_voice_command
 from .. import security
@@ -74,6 +75,35 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
 
     # Madde 3/1: dil ve konuşma modu sahibinin user_settings'inden gelir.
     owner_prefs = database.get_user_settings(owner_id)
+    # ── Madde 22: özel komutlar — eşleşirse LLM'e gitmeden yürütülür ──
+    cmd = database.match_custom_command(owner_id, message)
+    if cmd is not None:
+        counters.bump_command_count()
+        action = cmd["action_type"]
+        payload_text = (cmd["action_payload"] or "").strip()
+        if action == "reply_text":
+            reply = payload_text or "Tamamdır."
+        else:  # open_app — beyaz liste (core.screen)
+            try:
+                screen_module.open_app(payload_text)
+                reply = f"{payload_text} açıldı."
+            except ValueError:
+                reply = f"'{payload_text}' beyaz listede yok; açamıyorum."
+            except Exception:
+                logger.exception("Özel komut: uygulama başlatılamadı")
+                reply = "Uygulama başlatılırken bir sorun oluştu."
+        if not guest:
+            database.add_message("user", message, owner_id=owner_id)
+            database.add_message("assistant", reply, owner_id=owner_id)
+        database.audit("chat.custom_command", detail=f"{cmd['phrase']} -> {action}")
+        return {
+            "reply": reply,
+            "used_tools": [],
+            "provider": "custom-command",
+            "model": action,
+            "error": False,
+        }
+
     result = await run_chat(
         message,
         request.app.state.llm,

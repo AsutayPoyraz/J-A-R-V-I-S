@@ -298,6 +298,51 @@ export const api = {
   reportActivity: () =>
     request<{ silenced: boolean }>("/api/reminders/activity", { method: "POST" }),
 
+  /** Bölüm E: üretkenlik + Memory Bank (madde 18, 23) — routes_agent.py şekilleri. */
+  notes: (query = "") =>
+    request<{ notes: import("../types").NoteItem[] }>(
+      `/api/notes${query ? `?query=${encodeURIComponent(query)}` : ""}`
+    ),
+  createNote: (title: string, content = "") =>
+    request<{ saved: boolean; id: number }>("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ title, content }),
+    }),
+  deleteNote: (id: number) =>
+    request<{ deleted: boolean }>(`/api/notes/${id}`, { method: "DELETE" }),
+  todos: () =>
+    request<{ todos: import("../types").TodoItem[] }>("/api/todos"),
+  createTodo: (title: string) =>
+    request<{ saved: boolean; id: number }>("/api/todos", {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  setTodoDone: (id: number, done: boolean) =>
+    request<{ updated: boolean }>(`/api/todos/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ done }),
+    }),
+  deleteTodo: (id: number) =>
+    request<{ deleted: boolean }>(`/api/todos/${id}`, { method: "DELETE" }),
+  memory: (query = "") =>
+    request<{ memories: import("../types").MemoryItem[] }>(
+      `/api/memory${query ? `?query=${encodeURIComponent(query)}` : ""}`
+    ),
+  createMemory: (content: string) =>
+    request<{ saved: boolean; id: number }>("/api/memory", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  deleteMemory: (id: number) =>
+    request<{ deleted: boolean }>(`/api/memory/${id}`, { method: "DELETE" }),
+
+  /** Bölüm E (madde 9): ekran analizi — vision sağlayıcı anahtarı gerekir. */
+  screenAnalyze: (question = "") =>
+    request<{ available: boolean; analysis?: string; reason?: string }>(
+      "/api/screen/analyze",
+      { method: "POST", body: JSON.stringify({ question }) }
+    ),
+
   /** Faz 2: eşleştirme — QR akışı ve cihaz yönetimi (routes_pair.py şekilleri). */
   pairStart: () =>
     request<{ code: string; expires_in: number; url: string }>("/api/pair/start", {

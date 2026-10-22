@@ -25,6 +25,9 @@ GUEST_ALLOWED_PREFIXES = (
     "/api/pair/",
     "/api/session",
     "/api/weather",
+    # Memory Bank okuması misafire açıktır; misafir sahibinin kaydı yoktur →
+    # liste boş döner. Yazma/silme uç içi require_not_guest ile 403'lenir.
+    "/api/memory",
 )
 
 GUEST_DENIED_MESSAGE = "Misafir modunda bu özellik kullanılamaz."

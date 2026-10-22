@@ -13,6 +13,7 @@ import WeatherCard from "./components/WeatherCard";
 import CameraCard from "./components/CameraCard";
 import UptimeCard from "./components/UptimeCard";
 import ReminderCard from "./components/ReminderCard";
+import AgentCard from "./components/AgentCard";
 import PairCard from "./components/PairCard";
 import FileTransferCard from "./components/FileTransferCard";
 import CenterStage from "./components/CenterStage";
@@ -97,6 +98,9 @@ export default function App() {
         onRefresh={() => jarvis.refreshWeather(true)}
       />
       <ReminderCard online={jarvis.online} />
+      <GuestLocked title="Productivity" allowed={session.can("history")}>
+        <AgentCard />
+      </GuestLocked>
       <GuestLocked title="Camera" allowed={session.can("device_control")}>
         <CameraCard
         camera={jarvis.camera}

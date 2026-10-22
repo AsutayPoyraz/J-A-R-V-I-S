@@ -102,6 +102,24 @@ TOOL_SPECS: list[dict[str, Any]] = [
                 "required": ["reminder_id"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_memory",
+            "description": (
+                "Kullanıcı kalıcı olarak hatırlanmasını istediği bir bilgiyi "
+                "(madde 18 Memory Bank) kaydeder. Örn. 'doğum günüm 3 Nisan' "
+                "gibi kısa, kendine yeterli bir cümle yaz."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "Hatırlanacak bilgi (tek cümle)."}
+                },
+                "required": ["content"]
+            }
+        }
     }
 ]
 
@@ -156,6 +174,20 @@ async def execute_tool(
             ok = await asyncio.to_thread(_rem.delete, int(arguments.get("reminder_id") or 0))
             return {"deleted": ok}
         return {"acked": await asyncio.to_thread(_rem.ack_all, "voice")}
+
+    if name == "save_memory":
+        # Madde 18: Memory Bank — aktif sohbet sahibine yazar (core.context).
+        from . import context as _chat_context
+        from ..store import database as _database
+
+        content = str(arguments.get("content") or "").strip()
+        mid = await asyncio.to_thread(
+            _database.add_memory, _chat_context.get_owner(), content
+        )
+        if mid is None:
+            return {"saved": False, "reason": "misafir oturum veya boş içerik"}
+        return {"saved": True, "id": mid}
+
     return {"error": f"bilinmeyen araç: {name}"}
 
 # === Faz 5-6-7 entegrasyon araç köprüsü (INT57) ===
