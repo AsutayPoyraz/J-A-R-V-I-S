@@ -87,7 +87,11 @@ def claim(payload: ClaimBody) -> dict:
 
 @router.delete("/api/pair/devices/{device_id}")
 def remove_device(device_id: str, request: Request) -> dict:
-    _require_loopback(request)
+    # Kritik işlem: cihaz token'ı iptali 2FA elevation ister (madde 15).
+    # Loopback (PC) serbest; uzak istemciden X-Elevation-Token beklenir.
+    from .routes_critical import require_elevation
+
+    require_elevation(request)
     if not security.revoke(device_id):
         raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
     return {"revoked": device_id}

@@ -100,6 +100,9 @@ AUTH_SECRET = env("JARVIS_JWT_SECRET")
 ACCESS_TOKEN_TTL_SECONDS = 15 * 60            # madde 16: access 15 dk
 REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600     # madde 16: refresh 7 gün
 RESET_TOKEN_TTL_SECONDS = 10 * 60             # şifre sıfırlama token'ı 10 dk
+ELEVATION_TTL_SECONDS = 2 * 60                # 2FA elevation token'ı 2 dk (madde 15)
+# PC'yi kapatma komutu varsayılan KAPALIdır; açmak için .env: JARVIS_ALLOW_SHUTDOWN=1
+ALLOW_SHUTDOWN = env("JARVIS_ALLOW_SHUTDOWN") == "1"
 BCRYPT_ROUNDS = 12                            # madde 16: bcrypt 12 round
 LOGIN_MAX_FAILURES = 5                        # madde 16: 5 hatalı girişte
 LOGIN_BLOCK_SECONDS = 15 * 60                 # 15 dakika engelleme

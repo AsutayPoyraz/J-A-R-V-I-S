@@ -4,7 +4,8 @@ Güvenlik:
 - Yalnızca JARVIS_FILES_DIR (varsayılan ~/JarvisFiles) içinde çalışır.
 - Path traversal koruması: resolve + is_relative_to kontrolü.
 - Dosya adı sanitizasyonu: yol ayracı ve gizli dosya karakterleri temizlenir.
-- Silme uçları yoktur; yükleme yalnızca açık POST ile yapılır.
+- Silme yalnızca 2FA elevation korumalı DELETE ucuyla yapılır (madde 15);
+  yükleme yalnızca açık POST ile yapılır.
 """
 from __future__ import annotations
 
@@ -60,10 +61,15 @@ def check_extension(name: str) -> None:
 
 
 def uploads_dir() -> pathlib.Path:
-    """Telefondan gelen dosyaların kaydedildiği klasör (varsayılan: Downloads)."""
+    """Aktarım klasörü — tek dizin ilkesi: varsayılan shared_dir() ile aynı.
+
+    Telefondan gelen yüklemeler, listeleme, indirme ve silme aynı klasörde
+    buluşmalı ki yüklenen dosya listede görünsün ve silinebilsin.
+    JARVIS_UPLOADS_DIR ile ayrı hedefe yönlendirilebilir (ileri kullanım).
+    """
     raw = config.env("JARVIS_UPLOADS_DIR", "")
     if not raw:
-        raw = os.path.join(os.path.expanduser("~"), "Downloads")
+        return shared_dir()
     path = pathlib.Path(raw)
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -116,6 +122,19 @@ def read_file(name: str) -> bytes:
     if not path.is_file():
         raise FileNotFoundError(f"'{name}' bulunamadı.")
     return path.read_bytes()
+
+
+def delete_file(name: str) -> dict:
+    """Paylaşım klasöründeki dosyayı siler (2FA elevation korumalı uçtan çağrılır)."""
+    safe = sanitize_name(name)
+    path = _resolve(safe)
+    if not path.is_file():
+        raise FileNotFoundError(f"'{safe}' bulunamadı.")
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise PermissionError(f"'{safe}' silinemedi: {exc}") from exc
+    return {"deleted": safe}
 
 
 def write_file(name: str, data: bytes, target_dir: pathlib.Path | None = None) -> dict:

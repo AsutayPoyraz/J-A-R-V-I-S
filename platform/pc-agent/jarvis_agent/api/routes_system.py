@@ -4,9 +4,9 @@ from __future__ import annotations
 import socket
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
-from .. import config
+from .. import config, security
 from ..core import counters
 from ..core import weather as weather_module
 from ..relay_client import wake_via_node
@@ -146,3 +146,130 @@ def get_weather(
 def get_audit(limit: int = 100) -> dict:
     """Son audit kayıtları (Faz 1: yerel; Faz 2: cihaz bazlı)."""
     return {"entries": database.get_audit(limit=limit)}
+
+
+# ── Bölüm C — madde 12: cihaz algılama (User-Agent) ─────────────────────────
+
+_OS_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("Windows NT 10.0", "Windows 10/11"),
+    ("Windows NT 6.3", "Windows 8.1"),
+    ("Windows NT 6.2", "Windows 8"),
+    ("Windows NT 6.1", "Windows 7"),
+    ("Windows", "Windows"),
+    ("iPhone OS", "iOS"),
+    ("iPad; CPU OS", "iPadOS"),
+    ("CPU OS", "iPadOS"),
+    ("Android", "Android"),
+    ("Mac OS X", "macOS"),
+    ("CrOS", "ChromeOS"),
+    ("Linux", "Linux"),
+)
+
+# Sıra önemlidir: en özel tarayıcı önce test edilir.
+_BROWSER_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("Edg/", "Edge"),
+    ("OPR/", "Opera"),
+    ("SamsungBrowser/", "Samsung Internet"),
+    ("Firefox/", "Firefox"),
+    ("Chrome/", "Chrome"),
+    ("Safari/", "Safari"),
+)
+
+
+def parse_user_agent(ua: str) -> dict:
+    """User-Agent'tan cihaz türü, işletim sistemi ve tarayıcı çıkarır."""
+    ua = (ua or "").strip()
+    lowered = ua.lower()
+    if "ipad" in lowered or "tablet" in lowered or ("android" in lowered and "mobile" not in lowered):
+        device_type = "tablet"
+    elif "mobile" in lowered or "iphone" in lowered or "android" in lowered:
+        device_type = "mobile"
+    else:
+        device_type = "desktop"
+
+    os_name, os_version = "Bilinmiyor", ""
+    for needle, label in _OS_PATTERNS:
+        if needle.lower() in lowered:
+            os_name = label
+            if "android" in lowered:
+                idx = lowered.find("android")
+                os_version = ua[idx + len("android"):].strip("; ) ").split(";")[0].strip()
+            elif "iphone os" in lowered or "cpu os" in lowered:
+                idx = lowered.find("cpu os")
+                os_version = ua[idx + len("cpu os"):].strip("_; ) ").split(" ")[0].replace("_", ".")
+            elif "mac os x" in lowered:
+                idx = lowered.find("mac os x")
+                os_version = ua[idx + len("mac os x"):].strip("; ) ").split(")")[0].replace("_", ".")
+            elif "windows nt" in lowered:
+                idx = lowered.find("windows nt")
+                os_version = ua[idx + len("windows nt"):].strip("; ) ").split(";")[0].strip()
+            break
+
+    browser, browser_version = "Bilinmiyor", ""
+    for needle, label in _BROWSER_PATTERNS:
+        idx = lowered.find(needle.lower())
+        if idx != -1:
+            browser = label
+            raw = ua[idx + len(needle):]
+            browser_version = raw.split(" ")[0].split(";")[0].strip()
+            break
+
+    return {
+        "device_type": device_type,
+        "os": os_name,
+        "os_version": os_version,
+        "browser": browser,
+        "browser_version": browser_version,
+    }
+
+
+@router.get("/api/system/device")
+def device_detect(request: Request) -> dict:
+    """İsteği yapan istemcinin cihaz bilgisi (madde 12: cihaz algılama paneli)."""
+    info = parse_user_agent(request.headers.get("user-agent", ""))
+    info["authenticated"] = guards_mode(request)
+    return info
+
+
+def guards_mode(request: Request) -> bool:
+    """Kullanıcının kimlikli istemci olup olmadığı (misafir ≠ kimlikli)."""
+    from . import guards
+
+    return guards.mode_of(request) != "guest"
+
+
+@router.post("/api/system/shutdown")
+def shutdown_pc(request: Request) -> dict:
+    """PC'yi kapatır — DAIMA 2FA elevation ister, varsayılan olarak kapalıdır.
+
+    JARVIS_ALLOW_SHUTDOWN=1 yoksa 503 döner (yanlışlıkla tetiklenemez).
+    """
+    from .routes_critical import elevation_of, require_elevation
+
+    require_elevation(request)  # shutdown DAIMA 2FA elevation ister (loopback dahil)
+    user = getattr(request.state, "user", None) or {}
+    if not user.get("id"):
+        user = security.require_user(request)  # yerel (PC) istek → sahip hesabı
+    user_id = str(user.get("id") or "")
+    token = elevation_of(request)
+    from .. import twofa
+
+    if not twofa.verify_elevation(token, user_id):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "2fa_elevation_required", "reason": "PC'yi kapatmak için 2FA onayı gerekli"},
+        )
+    if not config.ALLOW_SHUTDOWN:
+        raise HTTPException(
+            status_code=503,
+            detail="PC kapatma devre dışı (.env: JARVIS_ALLOW_SHUTDOWN=1 ile açılır).",
+        )
+    database.audit("system.shutdown", actor=f"user:{user_id}")
+    import subprocess
+
+    try:
+        subprocess.Popen(["shutdown", "/s", "/t", "10"])
+    except OSError as exc:  # shutdown komutu yok (macOS/Linux)
+        raise HTTPException(status_code=500, detail=f"Kapatma komutu çalıştırılamadı: {exc}") from exc
+    return {"ok": True, "detail": "PC 10 saniye içinde kapatılacak."}
+

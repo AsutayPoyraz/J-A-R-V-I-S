@@ -1,15 +1,16 @@
 """Dosya transferi uçları — telefon <-> PC paylaşım klasörü.
 
 Güvenlik (integrations/files.py içinde): yol kaçışı engelli, ad sanitizeli,
-silme ucu yok, 50 MB sınırı (JARVIS_MAX_UPLOAD_MB ile değiştirilebilir),
-uzantı allow-list/deny-list. Telefondan gelen dosyalar Downloads'a kaydedilir;
+50 MB sınırı (JARVIS_MAX_UPLOAD_MB ile değiştirilebilir), uzantı
+allow-list/deny-list. Telefondan gelen dosyalar Downloads'a kaydedilir;
 PC'ye WebSocket bildirimi (files.received) gönderilir.
+Silme KRİTİK işlem sayılır: 2FA elevation ister (madde 15, routes_critical).
 """
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, File, HTTPException, Query
+from fastapi import APIRouter, File, HTTPException, Query, Request
 from fastapi import UploadFile
 from fastapi.responses import FileResponse
 
@@ -17,6 +18,7 @@ from ..core import counters
 from ..integrations import files as files_module
 from ..store import database
 from . import guards
+from .routes_critical import require_elevation
 
 logger = logging.getLogger("jarvis.api.files")
 
@@ -84,6 +86,25 @@ def _notify_pc(result: dict) -> None:
         _ = (config, security)
 
     loop.create_task(_publish())
+
+
+@router.delete("/api/files/{name}")
+def delete_file_endpoint(name: str, request: Request) -> dict:
+    """Paylaşılan dosyayı siler — kritik işlem: 2FA elevation ister (madde 15).
+
+    Loopback (PC) istekleri güvenilir kabul edilir; uzak istemcilerden
+    X-Elevation-Token beklenir (yoksa 403 + code=2fa_elevation_required).
+    """
+    require_elevation(request)
+    safe = files_module.sanitize_name(name)
+    try:
+        result = files_module.delete_file(safe)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    database.audit("files.delete", actor="elevated", detail=safe)
+    return result
 
 
 @router.get("/api/files/download")
