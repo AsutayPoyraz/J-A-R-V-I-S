@@ -334,6 +334,9 @@ export function useJarvis() {
       chat_panel_position?: AppSettings["chat_panel_position"];
       conversation_mode?: AppSettings["conversation_mode"];
       custom_palette?: Record<string, string>;
+      /** Madde 14: TTS tercihleri modal'dan gelir. */
+      tts_voice?: string;
+      tts_rate?: number;
     }) => {
       const updated = await api.updateSettings(patch);
       setSettings(updated);

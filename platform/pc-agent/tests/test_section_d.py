@@ -80,7 +80,7 @@ def test_run_chat_injects_mode_prompt():
 
 # ── Madde 14: TTS ayarları ──────────────────────────────────────────────────
 
-def test_tts_defaults():
+def test_tts_defaults(rig):
     row = database.get_user_settings("tts-default-user")
     assert row["tts_rate"] == 1.0
     assert row["tts_voice"] == "tr"
@@ -130,3 +130,25 @@ def test_tts_service_clamps():
     svc.configure(lang="en")
     assert svc._lang == "en"
     assert svc.settings == {"lang": "en", "rate": 0.5}
+
+
+# ── Madde 32: panel konumu — web anahtarı uyumluluğu (regresyon) ────────────
+
+def test_settings_position_alias_roundtrip(rig):
+    """Web 'chat_panel_position' gönderir; backend her iki anahtarı da işler."""
+    app, _ = rig
+    with TestClient(app) as client:
+        r = client.put("/api/settings", json={"chat_panel_position": "center"})
+        assert r.status_code == 200
+        data = client.get("/api/settings").json()
+        assert data["chat_position"] == "center"
+        assert data["chat_panel_position"] == "center"
+        # Klasik anahtar da çalışır.
+        assert client.put("/api/settings", json={"chat_position": "right"}).status_code == 200
+        assert client.get("/api/settings").json()["chat_panel_position"] == "right"
+
+
+def test_settings_position_alias_invalid(rig):
+    app, _ = rig
+    with TestClient(app) as client:
+        assert client.put("/api/settings", json={"chat_panel_position": "left"}).status_code == 422

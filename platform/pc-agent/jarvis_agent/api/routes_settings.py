@@ -24,6 +24,9 @@ class SettingsUpdate(BaseModel):
     city: str | None = None
     language: str | None = None
     chat_position: str | None = None
+    # Web istemcisi 'chat_panel_position' anahtarını gönderir; her ikisi de kabul
+    # edilir (madde 32 — panel konumu).
+    chat_panel_position: str | None = None
     conversation_mode: str | None = None
     # Madde 14: TTS tercihleri
     tts_rate: float | None = None
@@ -48,6 +51,8 @@ def get_settings(request: Request) -> dict:
         "city": row["city"],
         "language": language,
         "chat_position": position,
+        # Web istemcisi 'chat_panel_position' okur; her iki anahtar da döner.
+        "chat_panel_position": position,
         "conversation_mode": _mode(row),
         "custom_palette": _palette(row),
         "tts_rate": _tts_rate(row),
@@ -115,10 +120,11 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
         if payload.language not in config.ALLOWED_LANGUAGES:
             raise HTTPException(status_code=422, detail="Geçersiz dil.")
         patch["language"] = payload.language
-    if payload.chat_position is not None:
-        if payload.chat_position not in config.ALLOWED_CHAT_POSITIONS:
+    if payload.chat_position is not None or payload.chat_panel_position is not None:
+        incoming = payload.chat_position or payload.chat_panel_position
+        if incoming not in config.ALLOWED_CHAT_POSITIONS:
             raise HTTPException(status_code=422, detail="Geçersiz panel konumu.")
-        patch["chat_position"] = payload.chat_position
+        patch["chat_position"] = incoming
     if payload.city is not None:
         city = payload.city.strip()
         if not (1 <= len(city) <= 64):
