@@ -119,8 +119,12 @@ export interface AppSettings {
   custom_palette: CustomPalette | null;
   /** Prompt 6: kritik komutlarda 2FA. */
   twofa_enabled?: boolean;
+  /** Madde 14: TTS ses (tr/en) ve hız (0.5-2.0x) tercihleri. */
+  tts_voice: string;
+  tts_rate: number;
   allowed_background_colors: BackgroundColor[];
   allowed_conversation_modes?: ConversationMode[];
+  allowed_tts_voices?: string[];
 }
 
 /** Faz 4: hatırlatıcı — reminders/service.py şemasıyla uyumlu. */

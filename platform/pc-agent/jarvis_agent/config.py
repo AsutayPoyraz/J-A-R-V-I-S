@@ -40,6 +40,10 @@ ALLOWED_CONVERSATION_MODES = ("formal", "casual", "adaptive")
 # Kullanıcı ayarları için izinli değerler (kullanıcıya özel ayarlar DB'de tutulur).
 ALLOWED_LANGUAGES = ("tr", "en")
 ALLOWED_CHAT_POSITIONS = ("right", "center")
+# Madde 14: TTS ses dilleri (gTTS desteğiyle sınırlı); hız 0.5-2.0x.
+ALLOWED_TTS_VOICES = ("tr", "en")
+TTS_MIN_RATE = 0.5
+TTS_MAX_RATE = 2.0
 
 # Şablon dosyalarındaki sahte anahtar değerleri geçersiz sayılır.
 _PLACEHOLDER_PREFIXES = ("your_", "xxx", "changeme")
@@ -110,6 +114,15 @@ DEFAULT_LANGUAGE = env("JARVIS_DEFAULT_LANGUAGE", "tr")
 DEFAULT_CONVERSATION_MODE = env("JARVIS_DEFAULT_CONVERSATION_MODE", "adaptive")
 if DEFAULT_CONVERSATION_MODE not in ALLOWED_CONVERSATION_MODES:
     DEFAULT_CONVERSATION_MODE = "adaptive"
+
+# Madde 14: TTS ses (tr/en) ve hız (0.5-2.0x) varsayılanları.
+DEFAULT_TTS_VOICE = env("JARVIS_TTS_VOICE", "tr")
+if DEFAULT_TTS_VOICE not in ALLOWED_TTS_VOICES:
+    DEFAULT_TTS_VOICE = "tr"
+try:
+    DEFAULT_TTS_RATE = min(2.0, max(0.5, float(env("JARVIS_TTS_RATE", 1.0))))
+except (TypeError, ValueError):
+    DEFAULT_TTS_RATE = 1.0
 
 
 # ── LLM sağlayıcısı ──────────────────────────────────────────────────────────

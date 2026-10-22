@@ -25,6 +25,8 @@ interface Props {
     chat_panel_position?: ChatPanelPosition;
     conversation_mode?: ConversationMode;
     custom_palette?: Record<string, string>;
+    tts_voice?: string;
+    tts_rate?: number;
   }) => Promise<unknown>;
   onSaveVoice: (patch: {
     wake_phrases?: string[];
@@ -86,6 +88,9 @@ export default function SettingsModal({
   const [exitText, setExitText] = useState("");
   const [clapEnabled, setClapEnabled] = useState(true);
   const [clapSens, setClapSens] = useState(6.0);
+  // Madde 14: TTS ses ve hız tercihleri
+  const [ttsVoice, setTtsVoice] = useState("tr");
+  const [ttsRate, setTtsRate] = useState(1.0);
 
   useEffect(() => {
     if (open && settings) {
@@ -93,6 +98,8 @@ export default function SettingsModal({
       setCity(settings.city);
       setChatPosition(settings.chat_panel_position);
       setMode(settings.conversation_mode ?? "adaptive");
+      setTtsVoice(settings.tts_voice ?? "tr");
+      setTtsRate(settings.tts_rate ?? 1.0);
       if (settings.custom_palette?.accent) {
         const [r, g, b] = settings.custom_palette.accent.split(" ").map(Number);
         if ([r, g, b].every((n) => Number.isFinite(n))) setCustomAccent(`#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`);
@@ -124,6 +131,8 @@ export default function SettingsModal({
         city: city.trim() || undefined,
         chat_panel_position: chatPosition,
         conversation_mode: mode,
+        tts_voice: ttsVoice,
+        tts_rate: ttsRate,
         custom_palette:
           color === "custom"
             ? { accent: hexToRgb(customAccent), bg_page: customBg }
@@ -330,6 +339,43 @@ export default function SettingsModal({
               Mikrofon bu cihazda bulunamadı; ayarlar yine de kaydedilir.
             </p>
           )}
+
+          {/* Madde 14: TTS ses ve hız */}
+          <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-slate-400">
+            {t("settings.tts_voice")}
+          </label>
+          <div className="mb-3 flex gap-2">
+            {(["tr", "en"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setTtsVoice(v)}
+                className="flex-1 rounded-lg border py-2 text-xs font-semibold"
+                style={{
+                  borderColor: ttsVoice === v ? "rgb(var(--accent-soft-rgb))" : "var(--border)",
+                  background: ttsVoice === v ? "rgb(var(--accent-rgb) / 0.2)" : "transparent",
+                  color: ttsVoice === v ? "rgb(var(--accent-soft-rgb))" : "var(--text-dim)",
+                }}
+              >
+                {v === "tr" ? t("settings.language_tr") : t("settings.language_en")}
+              </button>
+            ))}
+          </div>
+
+          <label htmlFor="tts-rate" className="mb-1.5 block text-[11px] uppercase tracking-widest text-slate-400">
+            {t("settings.tts_rate")} ({ttsRate.toFixed(2)}x)
+          </label>
+          <input
+            id="tts-rate"
+            type="range"
+            min={0.5}
+            max={2}
+            step={0.05}
+            value={ttsRate}
+            onChange={(e) => setTtsRate(Number(e.target.value))}
+            className="w-full accent-[rgb(var(--accent-rgb))]"
+          />
+          <p className="mb-3 text-[10px] text-slate-500">{t("settings.tts_rate_hint")}</p>
 
           {/* Uyandırma ifadeleri — satır satır */}
           <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-slate-400">

@@ -12,6 +12,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .. import security
 from ..store import database
 from ..voice.textmatch import normalize
 
@@ -77,7 +78,8 @@ def voice_say(request: Request, payload: dict) -> dict:
     if len(text) > 2000:
         raise HTTPException(status_code=422, detail="Metin çok uzun (maks 2000).")
     service = _service(request)
-    ok = service.speak(text)
+    # Madde 7/14: TTS ses/hız tercihi isteğin sahibinden okunur.
+    ok = service.speak(text, owner_id=security.request_owner(request))
     return {"spoken": ok}
 
 

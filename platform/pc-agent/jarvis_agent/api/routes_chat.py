@@ -72,6 +72,8 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
             "voice_mode": False,
         }
 
+    # Madde 3/1: dil ve konuşma modu sahibinin user_settings'inden gelir.
+    owner_prefs = database.get_user_settings(owner_id)
     result = await run_chat(
         message,
         request.app.state.llm,
@@ -79,7 +81,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         source="text",
         owner_id=owner_id,
         persist=not guest,
-        # Madde 3: sahibinin dil tercihi system promptu seçer.
-        language=database.get_user_settings(owner_id).get("language") or "tr",
+        language=owner_prefs.get("language") or "tr",
+        mode=owner_prefs.get("conversation_mode") or "adaptive",
     )
     return result

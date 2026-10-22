@@ -230,16 +230,19 @@ class VoiceService:
         database.audit("voice.mode_exit", detail="ui_button")
 
     # ── Seslendirme (REST + hatırlatıcılar) ──
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, owner_id: str = "local") -> bool:
         """Metni TTS ile oku; servis thread'i çalışmasa da kullanılabilir.
 
         Async TTS'i bağlı event loop üzerinde zamanlar ve bitmesini bekler
         (maks. 120 sn — çok uzun metinlerde UI kilitlenmesin).
+        ``owner_id``: madde 7/14 — ses/hız tercihi sahibine göre okunur.
         """
         if not self._loop or not self._loop.is_running():
             logger.warning("TTS atlandı: event loop bağlı değil")
             return False
-        future = asyncio.run_coroutine_threadsafe(self._tts.speak(text), self._loop)
+        future = asyncio.run_coroutine_threadsafe(
+            self._tts.speak(text, owner_id), self._loop
+        )
         try:
             return bool(future.result(timeout=120.0))
         except Exception:
@@ -467,8 +470,18 @@ class VoiceService:
 
             self._set(session="thinking")
             try:
+                # Madde 1/3: sesli mod da sahibinin dil ve mod tercihini kullanır.
+                _prefs = database.get_user_settings("local")
                 chat_result = self._run_async(
-                    run_chat(text, self._provider, self._monitor, source="voice")
+                    run_chat(
+                        text,
+                        self._provider,
+                        self._monitor,
+                        source="voice",
+                        owner_id="local",
+                        language=_prefs.get("language") or "tr",
+                        mode=_prefs.get("conversation_mode") or "adaptive",
+                    )
                 )
                 reply = chat_result.get("reply", "")
             except Exception:

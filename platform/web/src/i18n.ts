@@ -147,6 +147,11 @@ const tr: Dict = {
   // Hava durumu (konum)
   "weather.location": "Konumumu kullan",
   "weather.location_denied": "Konum izni verilmedi; kayıtlı şehir kullanılıyor.",
+
+  // Madde 14: TTS ses ayarları
+  "settings.tts_voice": "Konuşma sesi",
+  "settings.tts_rate": "Konuşma hızı",
+  "settings.tts_rate_hint": "0.5x – 2.0x arası; hız değişimi için ffmpeg gerekir.",
 };
 
 const en: Dict = {
@@ -271,6 +276,10 @@ const en: Dict = {
 
   "weather.location": "Use my location",
   "weather.location_denied": "Location permission denied; using saved city.",
+
+  "settings.tts_voice": "Speech voice",
+  "settings.tts_rate": "Speech rate",
+  "settings.tts_rate_hint": "0.5x – 2.0x; rate change requires ffmpeg.",
 };
 
 const DICTS: Record<Lang, Dict> = { tr, en };

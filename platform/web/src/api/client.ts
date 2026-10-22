@@ -214,6 +214,8 @@ export const api = {
       chat_panel_position: string;
       conversation_mode: string;
       custom_palette: Record<string, string>;
+      tts_voice: string;
+      tts_rate: number;
     }>
   ) =>
     request<import("../types").AppSettings>("/api/settings", {

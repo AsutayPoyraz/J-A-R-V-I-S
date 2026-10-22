@@ -25,6 +25,9 @@ class SettingsUpdate(BaseModel):
     language: str | None = None
     chat_position: str | None = None
     conversation_mode: str | None = None
+    # Madde 14: TTS tercihleri
+    tts_rate: float | None = None
+    tts_voice: str | None = None
     # Özel palet: {"accent": "r g b", "accent_soft": "r g b", "bg_page": "#hex"}
     custom_palette: dict[str, str] | None = None
 
@@ -47,6 +50,8 @@ def get_settings(request: Request) -> dict:
         "chat_position": position,
         "conversation_mode": _mode(row),
         "custom_palette": _palette(row),
+        "tts_rate": _tts_rate(row),
+        "tts_voice": _tts_voice(row),
         "twofa_enabled": bool(row.get("twofa_enabled", 1)),
         # "guest" test sözleşmesi; owner_is_guest geriye dönük uyumluluk için.
         "guest": database.is_guest(owner),
@@ -55,6 +60,7 @@ def get_settings(request: Request) -> dict:
         "allowed_languages": list(config.ALLOWED_LANGUAGES),
         "allowed_chat_positions": list(config.ALLOWED_CHAT_POSITIONS),
         "allowed_conversation_modes": list(config.ALLOWED_CONVERSATION_MODES),
+        "allowed_tts_voices": list(config.ALLOWED_TTS_VOICES),
     }
 
 
@@ -76,6 +82,19 @@ def _palette(row: dict) -> dict[str, str] | None:
     if not isinstance(parsed, dict):
         return None
     return {k: str(v) for k, v in parsed.items() if k in config.ALLOWED_PALETTE_KEYS}
+
+
+def _tts_rate(row: dict) -> float:
+    """Madde 14: hız 0.5-2.0 aralığına kırpılır."""
+    try:
+        return min(2.0, max(0.5, float(row.get("tts_rate") or 1.0)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _tts_voice(row: dict) -> str:
+    voice = row.get("tts_voice")
+    return voice if voice in config.ALLOWED_TTS_VOICES else config.DEFAULT_TTS_VOICE
 
 
 @router.put("/api/settings")
@@ -111,6 +130,16 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
         if payload.conversation_mode not in config.ALLOWED_CONVERSATION_MODES:
             raise HTTPException(status_code=422, detail="Geçersiz konuşma modu.")
         patch["conversation_mode"] = payload.conversation_mode
+    if payload.tts_voice is not None:
+        if payload.tts_voice not in config.ALLOWED_TTS_VOICES:
+            raise HTTPException(status_code=422, detail="Geçersiz TTS sesi.")
+        patch["tts_voice"] = payload.tts_voice
+    if payload.tts_rate is not None:
+        if not (0.5 <= payload.tts_rate <= 2.0):
+            raise HTTPException(
+                status_code=422, detail="TTS hızı 0.5-2.0 arasında olmalı."
+            )
+        patch["tts_rate"] = round(payload.tts_rate, 2)
     if payload.custom_palette is not None:
         import json
         import re

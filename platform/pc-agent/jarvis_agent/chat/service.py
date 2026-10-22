@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Any, Optional
 
+from .. import config
 from ..core.stats import StatsMonitor
 from ..llm.provider import ChatProvider, ProviderError
 from ..llm.tools import TOOL_SPECS, execute_tool
@@ -41,9 +42,50 @@ SYSTEM_PROMPT_EN = (
 )
 
 
-def build_system_prompt(language: str = "tr") -> str:
-    """Madde 3: yanıt dili, sahibinin user_settings diline göre seçilir."""
-    return SYSTEM_PROMPT_EN if language == "en" else SYSTEM_PROMPT_TR
+# Madde 1: konuşma modları — sistem promptuna üslup talimatı eklenir.
+_MODE_TONE = {
+    "formal": {
+        "tr": (
+            "Üslup: resmî ve profesyonel — yönetim kurulu sunumu gibi ölçülü, "
+            "saygılı ve net konuş; şakaya girmeden bilgiyi aktar."
+        ),
+        "en": (
+            "Tone: formal and professional — measured, respectful and clear, "
+            "like a board-room briefing; convey information without jokes."
+        ),
+    },
+    "casual": {
+        "tr": (
+            "Üslup: samimi bir arkadaş gibi — esprili, rahat ve sıcak konuş; "
+            "'efendim' gibi resmî hitaplardan kaçın, hafif espri yapabilirsin."
+        ),
+        "en": (
+            "Tone: casual like a close friend — relaxed, warm and playful; "
+            "avoid formal honorifics, light humor is welcome."
+        ),
+    },
+    "adaptive": {
+        "tr": (
+            "Üslup: duruma göre uyum sağla — araştırma/bilgi aktarımında resmî "
+            "ve net ol; kullanıcı şaka yaptığında samimi ve esprili ol; yeniden "
+            "soru sorulduğunda resmî tona dön."
+        ),
+        "en": (
+            "Tone: adaptive to context — formal and precise for research and "
+            "factual answers, friendly and playful when the user jokes, and "
+            "back to formal when a serious question follows."
+        ),
+    },
+}
+
+
+def build_system_prompt(language: str = "tr", mode: str = "adaptive") -> str:
+    """Madde 3 + Madde 1: dil ve konuşma modu sistem promptunu belirler."""
+    lang = language if language in config.ALLOWED_LANGUAGES else "tr"
+    if mode not in config.ALLOWED_CONVERSATION_MODES:
+        mode = config.DEFAULT_CONVERSATION_MODE
+    base = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_TR
+    return f"{base} {_MODE_TONE[mode][lang]}"
 
 
 # Geriye dönük takma ad: testler ve diğer modüller TR promptu tek isimden okur.
@@ -59,12 +101,14 @@ async def run_chat(
     source: str = "text",
     owner_id: str = "local",
     language: str = "tr",
+    mode: str = "adaptive",
 ) -> dict[str, Any]:
     """Bir kullanıcı iletisini uçtan uca işler.
 
     persist=False yalnızca içsel denemeler içindir; üretimde her mesaj
     geçmişe yazılır (gereksinim 5.3: konuşma geçmişi yerelde saklanır).
-    ``language`` sistem promptunu seçer (madde 3: tr/en).
+    ``language`` sistem prompt dilini (madde 3), ``mode`` üslubu (madde 1:
+    formal/casual/adaptive) seçer.
     """
     message = (message or "").strip()
 
@@ -73,7 +117,7 @@ async def run_chat(
         database.audit("chat.message", detail=f"[{source}] {message[:200]}")
 
     llm_messages: list[dict] = [
-        {"role": "system", "content": build_system_prompt(language)}
+        {"role": "system", "content": build_system_prompt(language, mode)}
     ]
     if persist:
         for row in database.get_messages(limit=24, owner_id=owner_id):

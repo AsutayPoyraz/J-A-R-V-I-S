@@ -134,6 +134,8 @@ def _migrate_user_settings_columns(conn: sqlite3.Connection) -> None:
         ("conversation_mode", "TEXT NOT NULL DEFAULT 'adaptive'"),
         ("custom_palette", "TEXT"),
         ("twofa_enabled", "INTEGER NOT NULL DEFAULT 1"),
+        ("tts_rate", "REAL NOT NULL DEFAULT 1.0"),
+        ("tts_voice", "TEXT NOT NULL DEFAULT 'tr'"),
     )
     for name, ddl in additions:
         if name not in columns:
@@ -195,6 +197,8 @@ _USER_SETTINGS_COLS = (
     "conversation_mode",
     "custom_palette",
     "twofa_enabled",
+    "tts_rate",
+    "tts_voice",
 )
 
 
@@ -208,6 +212,8 @@ def _settings_defaults(owner_id: str) -> dict[str, Any]:
         "conversation_mode": config.DEFAULT_CONVERSATION_MODE,
         "custom_palette": None,
         "twofa_enabled": 1,
+        "tts_rate": config.DEFAULT_TTS_RATE,
+        "tts_voice": config.DEFAULT_TTS_VOICE,
         "updated_at": None,
     }
 
@@ -217,8 +223,8 @@ def _owner_row(owner_id: str) -> dict[str, Any]:
     with closing(connect()) as conn:
         row = conn.execute(
             "SELECT owner_id, theme, chat_position, language, city, "
-            "conversation_mode, custom_palette, twofa_enabled, updated_at "
-            "FROM user_settings WHERE owner_id = ?",
+            "conversation_mode, custom_palette, twofa_enabled, tts_rate, tts_voice, "
+            "updated_at FROM user_settings WHERE owner_id = ?",
             (owner_id,),
         ).fetchone()
     if row:
@@ -229,6 +235,24 @@ def _owner_row(owner_id: str) -> dict[str, Any]:
 def is_guest(owner_id: str) -> bool:
     """Misafir oturumlar kalıcı ayar yazamaz (madde 6/16 kuralı)."""
     return str(owner_id or "").startswith("guest:")
+
+
+def primary_owner_id() -> str:
+    """PC tarafı (sesli mod) için birincil sahip etiketi.
+
+    Kayıtlı en yeni hesabın 'user:<id>' etiketi döner; hesap yoksa 'local'.
+    Sesli modun konuşma modu/TTS tercihleri bu sahibinden okunur.
+    """
+    try:
+        with closing(connect()) as conn:
+            row = conn.execute(
+                "SELECT id FROM users ORDER BY created_at DESC, rowid DESC LIMIT 1"
+            ).fetchone()
+    except sqlite3.Error:
+        return "local"
+    if row and row["id"]:
+        return f"user:{row['id']}"
+    return "local"
 
 
 def get_user_settings(owner_id: str) -> dict[str, Any]:
