@@ -139,6 +139,29 @@ def notes_delete(note_id: int, request: Request) -> dict:
     return {"deleted": True}
 
 
+@router.get("/api/notes/export")
+def notes_export(request: Request):
+    """Madde 20: Collaborative Notes MVP — notları Markdown olarak indirir.
+
+    Notion/OneNote API'leri bu ortamda OAuth olmadan erişilemediği için
+    standart dosya dışa aktarma sunulur (raporda KISMEN olarak işaretlenir).
+    """
+    notes = database.list_notes(_owner(request), limit=500)
+    lines = ["# JARVIS Notları", ""]
+    for n in notes:
+        lines.append(f"## {n.get('title', '')}")
+        lines.append("")
+        lines.append(str(n.get("content", "")))
+        lines.append("")
+    from fastapi.responses import Response  # yerel import: sadece bu uç kullanır
+
+    return Response(
+        content="\n".join(lines),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="jarvis-notes.md"'},
+    )
+
+
 @router.get("/api/todos")
 def todos_list(request: Request, limit: int = 100) -> dict:
     return {"todos": database.list_todos(_owner(request), limit=limit)}

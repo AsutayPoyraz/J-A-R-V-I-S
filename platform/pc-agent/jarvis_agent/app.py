@@ -36,6 +36,8 @@ from .api import routes_critical
 from .api import routes_files
 from .api import routes_reminders
 from .api import routes_agent
+from .api import routes_social
+from .api import routes_productivity
 from .api import ws as ws_module
 from .camera.service import CameraService
 from .core import counters
@@ -265,6 +267,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_agent.router)
     app.include_router(routes_integrations.router)
     app.include_router(routes_smart_home.router)
+    app.include_router(routes_social.router)
+    app.include_router(routes_productivity.router)
     app.include_router(ws_module.router)
 
     @app.on_event("startup")

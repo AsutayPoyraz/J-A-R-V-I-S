@@ -16,7 +16,8 @@ from fastapi.responses import FileResponse
 
 from ..core import counters
 from ..integrations import files as files_module
-from ..store import database
+from .. import security
+from ..store import database, section_f
 from . import guards
 from .routes_critical import require_elevation
 
@@ -33,7 +34,7 @@ def list_files(request: object = None) -> dict:
 
 
 @router.post("/api/files/upload")
-async def upload_file(file: UploadFile = File(...)) -> dict:
+async def upload_file(request: Request, file: UploadFile = File(...)) -> dict:
     if file.size is not None and file.size > files_module.MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
@@ -55,6 +56,11 @@ async def upload_file(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     counters.bump_command_count()
     database.audit("files.upload", detail=result["name"])
+    # Bölüm F (madde 21): dosya XP'si — sunucu tarafında, misafir hariç.
+    if not security.is_guest(request):
+        owner = security.request_owner(request)
+        section_f.award_xp(owner, "file")
+        section_f.log_activity(owner, "file.upload", str(result.get("name", ""))[:60])
     _notify_pc(result)
     return result
 

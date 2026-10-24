@@ -153,3 +153,84 @@ async def ws_stats(websocket: WebSocket) -> None:
             await websocket.close()
         except Exception:
             pass
+
+
+# ── Bölüm F (madde 20): paylaşılan oturum canlı sohbet kanalı ────────────────
+
+# code -> {client_id: WebSocket}; oda bazlı yayın için ayrı kayıt
+_shared_rooms: dict[str, dict[str, WebSocket]] = {}
+
+
+async def _broadcast_shared(code: str, payload: dict) -> None:
+    """Odada herkese yayın; kopmuş soketleri sessizce ayıklar."""
+    room = _shared_rooms.get(code, {})
+    for cid, sock in list(room.items()):
+        try:
+            await sock.send_json(payload)
+        except Exception:
+            room.pop(cid, None)
+
+
+@router.websocket("/ws/shared/{code}")
+async def ws_shared(websocket: WebSocket, code: str) -> None:
+    """Paylaşılan oturumun canlı mesaj akışı (WebSocket ile ortak sohbet).
+
+    Yetkilendirme: bağlanan istemci oturumun üyesi olmalı (owner bazlı),
+    aksi halde 4403 ile kapatılır. Mesaj DB'ye yazılır ve odaya yayınlanır;
+    WS kullanamayan istemciler /api/shared/.../messages uzun yoklamasını
+    kullanmaya devam edebilir.
+    """
+    from ..store import section_f  # yerel import: döngüsel riski önle
+
+    # Kimlik çözümü: access_token varsa kullanıcı, yoksa cihaz sahibi
+    token = websocket.query_params.get("access_token", "")
+    if token:
+        try:
+            from .. import auth
+
+            token = auth.bearer_of(websocket) or token
+            claims = auth.decode_token(token, expected_type="access")
+            user_row = database.get_user_by_id(str(claims.get("sub") or ""))
+            if user_row:
+                websocket.state.user = user_row
+        except Exception:  # geçersiz token → cihaz kimliğiyle devam
+            pass
+    owner = security.request_owner(websocket)
+    room_code = code.upper()
+    if room_code not in section_f.shared_member_codes(owner):
+        logger.warning("Shared WS reddedildi: %s üye değil (%s)", owner, room_code)
+        await websocket.close(code=4403)
+        return
+    client_id = f"sh-{room_code}-{id(websocket)}"
+    await websocket.accept()
+    _shared_rooms.setdefault(room_code, {})[client_id] = websocket
+    try:
+        # Bağlanınca son 50 mesajı gönder (sohbet bağlamı)
+        history = section_f.list_shared_messages(room_code, limit=50)
+        await websocket.send_json({"type": "shared.history", "messages": history})
+        while True:
+            data = await websocket.receive_json()
+            content = str(data.get("content") or "").strip()
+            if not content:
+                continue
+            display = str(data.get("display_name") or "guest")[:40]
+            mid = section_f.add_shared_message(room_code, owner, display, "user", content)
+            await _broadcast_shared(
+                room_code,
+                {
+                    "type": "shared.message",
+                    "message": {
+                        "id": mid,
+                        "owner_id": owner,
+                        "display_name": display,
+                        "role": "user",
+                        "content": content,
+                    },
+                },
+            )
+    except WebSocketDisconnect:
+        pass
+    except Exception:  # beklenmedik kopma — oda kaydını temizle
+        logger.exception("Shared WS hatası (%s)", room_code)
+    finally:
+        _shared_rooms.get(room_code, {}).pop(client_id, None)

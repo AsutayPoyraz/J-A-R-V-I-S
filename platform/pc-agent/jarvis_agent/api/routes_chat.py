@@ -14,6 +14,7 @@ from ..chat.service import run_chat
 from ..core import counters
 from ..core import screen as screen_module
 from ..store import database
+from ..store import section_f  # Bölüm F: XP + activity (madde 20/21)
 from ..voice.textmatch import is_enter_voice_command
 from .. import security
 
@@ -114,4 +115,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         language=owner_prefs.get("language") or "tr",
         mode=owner_prefs.get("conversation_mode") or "adaptive",
     )
+    # Bölüm F (madde 21): sohbet XP'si — sunucu tarafında, misafir hariç.
+    section_f.award_xp(owner_id, "chat")
+    section_f.log_activity(owner_id, "chat", message[:60])
     return result

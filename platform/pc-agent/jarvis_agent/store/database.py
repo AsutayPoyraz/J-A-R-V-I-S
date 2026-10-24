@@ -149,6 +149,7 @@ def init_db() -> None:
             "ON messages (owner_id, id)"
         )
         _migrate_user_settings_columns(conn)
+        _ensure_section_f_tables(conn)
         for key, value in _default_settings().items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
@@ -177,6 +178,93 @@ def _migrate_user_settings_columns(conn: sqlite3.Connection) -> None:
         if name not in columns:
             conn.execute(f"ALTER TABLE user_settings ADD COLUMN {name} {ddl}")
 
+
+def _ensure_section_f_tables(conn: sqlite3.Connection) -> None:
+    """Bölüm F tabloları (madde 19/20/21/24) — idempotent."""
+    conn.executescript(
+        """
+        -- Madde 19: dosya etiketleri (owner bazlı metadata; dosya paylaşılan klasörde)
+        CREATE TABLE IF NOT EXISTS file_tags (
+            owner_id TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            tags TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_id, file_name)
+        );
+
+        -- Madde 19: sesli notlar (metin; Web Speech / yerel STT ile)
+        CREATE TABLE IF NOT EXISTS voice_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_voice_notes_owner ON voice_notes (owner_id, id);
+
+        -- Madde 20: makrolar / shortcut'lar
+        CREATE TABLE IF NOT EXISTS macros (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            steps TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            UNIQUE (owner_id, name)
+        );
+
+        -- Madde 20: etkinlik akışı (son 7 gün)
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_owner ON activity_log (owner_id, created_at);
+
+        -- Madde 21: XP olayları — puanlar yalnızca sunucu tarafında yazılır
+        CREATE TABLE IF NOT EXISTS xp_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            points INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_xp_owner_created ON xp_events (owner_id, created_at);
+
+        -- Madde 21: rozetler
+        CREATE TABLE IF NOT EXISTS badges (
+            owner_id TEXT NOT NULL,
+            code TEXT NOT NULL,
+            earned_at TEXT NOT NULL,
+            PRIMARY KEY (owner_id, code)
+        );
+
+        -- Madde 20: paylaşılan oturumlar (Shared Jarvis Sessions)
+        CREATE TABLE IF NOT EXISTS shared_sessions (
+            code TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS shared_members (
+            code TEXT NOT NULL,
+            owner_id TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '',
+            joined_at TEXT NOT NULL,
+            PRIMARY KEY (code, owner_id)
+        );
+        CREATE TABLE IF NOT EXISTS shared_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL,
+            owner_id TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT 'user',
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_shared_msgs ON shared_messages (code, id);
+        """
+    )
 
 
 def _default_settings() -> dict[str, str]:

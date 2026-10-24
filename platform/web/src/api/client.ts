@@ -382,4 +382,83 @@ export const api = {
     request<{ authorization_url: string }>("/api/smart-home/oauth/start"),
   smartHomeDisconnect: () =>
     request<{ disconnected: boolean }>("/api/smart-home/disconnect", { method: "POST" }),
+
+  /** Bölüm F (madde 19): sesli notlar + dosya etiketleri. */
+  voiceNotes: (q = "") =>
+    request<{ notes: import("../types").VoiceNoteItem[] }>(
+      `/api/voice-notes${q ? `?q=${encodeURIComponent(q)}` : ""}`
+    ),
+  createVoiceNote: (text: string) =>
+    request<{ id: number }>("/api/voice-notes", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  deleteVoiceNote: (id: number) =>
+    request<{ deleted: boolean }>(`/api/voice-notes/${id}`, { method: "DELETE" }),
+  fileTags: () => request<{ tags: Record<string, string[]> }>("/api/files/tags"),
+  setFileTags: (fileName: string, tags: string[]) =>
+    request<{ ok: boolean }>(`/api/files/tags/${encodeURIComponent(fileName)}`, {
+      method: "PUT",
+      body: JSON.stringify({ tags }),
+    }),
+
+  /** Bölüm F (madde 20): makrolar + paylaşılan oturumlar. */
+  macros: () => request<{ macros: import("../types").MacroItem[] }>("/api/macros"),
+  createMacro: (name: string, steps: Record<string, unknown>[] = []) =>
+    request<{ id: number }>("/api/macros", {
+      method: "POST",
+      body: JSON.stringify({ name, steps }),
+    }),
+  deleteMacro: (id: number) =>
+    request<{ deleted: boolean }>(`/api/macros/${id}`, { method: "DELETE" }),
+  createSharedSession: (title = "") =>
+    request<{ code: string }>("/api/shared/sessions", {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  sharedSession: (code: string) =>
+    request<import("../types").SharedSessionInfo>(`/api/shared/sessions/${code}`),
+  joinSharedSession: (code: string, displayName: string) =>
+    request<{ joined: boolean }>(`/api/shared/members/${code}`, {
+      method: "POST",
+      body: JSON.stringify({ display_name: displayName }),
+    }),
+  sharedMessages: (code: string, sinceId = 0) =>
+    request<{ messages: import("../types").SharedMessageItem[] }>(
+      `/api/shared/sessions/${code}/messages?since_id=${sinceId}`
+    ),
+  postSharedMessage: (code: string, content: string, displayName: string) =>
+    request<{ id: number }>(`/api/shared/sessions/${code}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content, display_name: displayName, role: "user" }),
+    }),
+  deleteSharedSession: (code: string) =>
+    request<{ deleted: boolean }>(`/api/shared/sessions/${code}`, { method: "DELETE" }),
+
+  /** Bölüm F (madde 21): oyunlaştırma — XP yalnızca sunucuda hesaplanır. */
+  gamify: () => request<import("../types").GamifyStatus>("/api/gamify"),
+  leaderboard: () =>
+    request<{ leaders: { name: string; xp: number }[] }>("/api/gamify/leaderboard"),
+
+  /** Bölüm F (madde 24): analitik, geçmiş arama, JSON/CSV + yedek indirme. */
+  analytics: (days = 14) =>
+    request<import("../types").AnalyticsSummary>(`/api/analytics/summary?days=${days}`),
+  historySearch: (q = "", tag = "", dateFrom = "", dateTo = "") => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (tag) p.set("tag", tag);
+    if (dateFrom) p.set("date_from", dateFrom);
+    if (dateTo) p.set("date_to", dateTo);
+    return request<{ results: import("../types").HistoryResult[] }>(
+      `/api/history/search?${p.toString()}`
+    );
+  },
+  exportAnalytics: (format: "json" | "csv") =>
+    requestBlob(`/api/analytics/export?format=${format}`),
+  backupExport: () => requestBlob("/api/backup/export"),
+  backupImport: (data: Record<string, unknown>) =>
+    request<{ imported: Record<string, number> }>("/api/backup/import", {
+      method: "POST",
+      body: JSON.stringify({ data }),
+    }),
 };

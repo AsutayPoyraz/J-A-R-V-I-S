@@ -184,3 +184,77 @@ export interface MemoryItem {
   content: string;
   created_at: string;
 }
+
+/** Bölüm F (madde 19/20/21/24): sesli notlar, makrolar, oyunlaştırma, analitik. */
+export interface VoiceNoteItem {
+  id: number;
+  text: string;
+  created_at: string;
+}
+
+export interface MacroItem {
+  id: number;
+  name: string;
+  steps: Record<string, unknown>[];
+  created_at: string;
+}
+
+export interface SharedMember {
+  owner_id: string;
+  display_name: string;
+  joined_at: string;
+}
+
+export interface SharedSessionInfo {
+  code: string;
+  owner_id: string;
+  title: string;
+  created_at: string;
+  members: SharedMember[];
+}
+
+export interface SharedMessageItem {
+  id: number;
+  owner_id: string;
+  display_name: string;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export interface DailyTask {
+  code: string;
+  goal: number;
+  done: number;
+}
+
+export interface GamifyStatus {
+  xp_total: number;
+  level: number;
+  streak_days: number;
+  counts: Record<string, number>;
+  level_progress: number;
+  today_xp: number;
+  badges: { code: string; earned_at: string }[];
+  daily_tasks: DailyTask[];
+}
+
+export interface AnalyticsDay {
+  date: string;
+  [key: string]: number | string;
+}
+
+export interface AnalyticsSummary {
+  days: AnalyticsDay[];
+  totals: Record<string, number>;
+  period_days: number;
+}
+
+export interface HistoryResult {
+  source: string;
+  id: number | string;
+  text: string;
+  detail?: string;
+  tags?: string;
+  created_at: string;
+}
