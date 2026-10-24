@@ -237,6 +237,8 @@ export interface GamifyStatus {
   today_xp: number;
   badges: { code: string; earned_at: string }[];
   daily_tasks: DailyTask[];
+  /** Opsiyonel: ENABLE_LEADERBOARD=1 iken merged yanıtla gelir (madde 21). */
+  leaderboard?: { name: string; xp: number }[];
 }
 
 export interface AnalyticsDay {

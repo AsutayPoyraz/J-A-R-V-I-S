@@ -14,6 +14,7 @@ import CameraCard from "./components/CameraCard";
 import UptimeCard from "./components/UptimeCard";
 import ReminderCard from "./components/ReminderCard";
 import AgentCard from "./components/AgentCard";
+import SocialCard from "./components/SocialCard";
 import PairCard from "./components/PairCard";
 import FileTransferCard from "./components/FileTransferCard";
 import CenterStage from "./components/CenterStage";
@@ -100,6 +101,9 @@ export default function App() {
       <ReminderCard online={jarvis.online} />
       <GuestLocked title="Productivity" allowed={session.can("history")}>
         <AgentCard />
+      </GuestLocked>
+      <GuestLocked title="Social" allowed={session.can("history")}>
+        <SocialCard />
       </GuestLocked>
       <GuestLocked title="Camera" allowed={session.can("device_control")}>
         <CameraCard

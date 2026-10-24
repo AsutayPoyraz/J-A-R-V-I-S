@@ -456,6 +456,8 @@ export const api = {
   exportAnalytics: (format: "json" | "csv") =>
     requestBlob(`/api/analytics/export?format=${format}`),
   backupExport: () => requestBlob("/api/backup/export"),
+  /** Notları Markdown olarak indir (madde 20: Collaborative Notes MVP). */
+  notesExport: () => requestBlob("/api/notes/export"),
   backupImport: (data: Record<string, unknown>) =>
     request<{ imported: Record<string, number> }>("/api/backup/import", {
       method: "POST",
