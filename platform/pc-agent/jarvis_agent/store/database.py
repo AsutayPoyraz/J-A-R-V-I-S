@@ -326,6 +326,15 @@ def _ensure_section_g_tables(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL,
             PRIMARY KEY (owner_id, day)
         );
+
+        -- Madde 27: günlük kullanım dakikaları (limit kontrolü için)
+        CREATE TABLE IF NOT EXISTS usage_days (
+            owner_id TEXT NOT NULL,
+            day TEXT NOT NULL,
+            minutes INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_id, day)
+        );
         """
     )
 
