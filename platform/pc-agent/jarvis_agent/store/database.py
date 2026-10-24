@@ -150,6 +150,7 @@ def init_db() -> None:
         )
         _migrate_user_settings_columns(conn)
         _ensure_section_f_tables(conn)
+        _ensure_section_g_tables(conn)
         for key, value in _default_settings().items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
@@ -173,6 +174,20 @@ def _migrate_user_settings_columns(conn: sqlite3.Connection) -> None:
         ("twofa_enabled", "INTEGER NOT NULL DEFAULT 1"),
         ("tts_rate", "REAL NOT NULL DEFAULT 1.0"),
         ("tts_voice", "TEXT NOT NULL DEFAULT 'tr'"),
+        # Bölüm G (madde 25/26/27)
+        ("privacy_mode", "INTEGER NOT NULL DEFAULT 0"),
+        ("auto_lock_minutes", "INTEGER NOT NULL DEFAULT 0"),
+        ("persona_name", "TEXT"),
+        ("persona_style", "TEXT"),
+        ("dashboard_layout", "TEXT"),
+        ("font_scale", "REAL NOT NULL DEFAULT 1.0"),
+        ("dyslexic_font", "INTEGER NOT NULL DEFAULT 0"),
+        ("high_contrast", "INTEGER NOT NULL DEFAULT 0"),
+        ("break_reminder_minutes", "INTEGER NOT NULL DEFAULT 0"),
+        ("daily_limit_minutes", "INTEGER NOT NULL DEFAULT 0"),
+        ("focus_mode", "INTEGER NOT NULL DEFAULT 0"),
+        ("mood", "TEXT NOT NULL DEFAULT 'neutral'"),
+        ("mood_updated_at", "TEXT"),
     )
     for name, ddl in additions:
         if name not in columns:
@@ -267,6 +282,54 @@ def _ensure_section_f_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_section_g_tables(conn: sqlite3.Connection) -> None:
+    """Bölüm G tabloları (madde 25/27) — idempotent."""
+    conn.executescript(
+        """
+        -- Madde 25: güvenlik denetim kaydı (oturum, dosya, eşleştirme, kritik işlem)
+        CREATE TABLE IF NOT EXISTS security_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            ip TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sec_events_owner
+            ON security_events (owner_id, id);
+
+        -- Madde 25: istemci tarafı şifreli notlar (sunucu yalnız şifreli metin görür)
+        CREATE TABLE IF NOT EXISTS secure_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id TEXT NOT NULL,
+            title_cipher TEXT NOT NULL,
+            body_cipher TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_secure_notes_owner
+            ON secure_notes (owner_id, id);
+
+        -- Madde 25: hassas işlem izinleri (varsayılan açık; owner kapatabilir)
+        CREATE TABLE IF NOT EXISTS permission_overrides (
+            owner_id TEXT NOT NULL,
+            permission TEXT NOT NULL,
+            allowed INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_id, permission)
+        );
+
+        -- Madde 27: mood tracker günlüğü (owner+gün başına tek kayıt)
+        CREATE TABLE IF NOT EXISTS mood_log (
+            owner_id TEXT NOT NULL,
+            day TEXT NOT NULL,
+            mood TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (owner_id, day)
+        );
+        """
+    )
+
+
 def _default_settings() -> dict[str, str]:
     return {
         "background_color": config.DEFAULT_BG_COLOR,
@@ -323,6 +386,20 @@ _USER_SETTINGS_COLS = (
     "twofa_enabled",
     "tts_rate",
     "tts_voice",
+    # Bölüm G (madde 25/26/27): gizlilik, arayüz, iyi oluş
+    "privacy_mode",
+    "auto_lock_minutes",
+    "persona_name",
+    "persona_style",
+    "dashboard_layout",
+    "font_scale",
+    "dyslexic_font",
+    "high_contrast",
+    "break_reminder_minutes",
+    "daily_limit_minutes",
+    "focus_mode",
+    "mood",
+    "mood_updated_at",
 )
 
 
@@ -338,6 +415,20 @@ def _settings_defaults(owner_id: str) -> dict[str, Any]:
         "twofa_enabled": 1,
         "tts_rate": config.DEFAULT_TTS_RATE,
         "tts_voice": config.DEFAULT_TTS_VOICE,
+        # Bölüm G varsayılanları
+        "privacy_mode": 0,
+        "auto_lock_minutes": 0,
+        "persona_name": "JARVIS",
+        "persona_style": None,
+        "dashboard_layout": None,
+        "font_scale": 1.0,
+        "dyslexic_font": 0,
+        "high_contrast": 0,
+        "break_reminder_minutes": 0,
+        "daily_limit_minutes": 0,
+        "focus_mode": 0,
+        "mood": "neutral",
+        "mood_updated_at": None,
         "updated_at": None,
     }
 
@@ -348,7 +439,11 @@ def _owner_row(owner_id: str) -> dict[str, Any]:
         row = conn.execute(
             "SELECT owner_id, theme, chat_position, language, city, "
             "conversation_mode, custom_palette, twofa_enabled, tts_rate, tts_voice, "
-            "updated_at FROM user_settings WHERE owner_id = ?",
+            "privacy_mode, auto_lock_minutes, persona_name, persona_style, "
+            "dashboard_layout, font_scale, dyslexic_font, high_contrast, "
+            "break_reminder_minutes, daily_limit_minutes, focus_mode, "
+            "mood, mood_updated_at, updated_at "
+            "FROM user_settings WHERE owner_id = ?",
             (owner_id,),
         ).fetchone()
     if row:
