@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ..core import counters
 from ..store import database
 from ..camera.service import CameraError
+from .guards import require_permission
 
 logger = logging.getLogger("jarvis.api.camera")
 
@@ -24,6 +25,7 @@ def _to_503(exc: CameraError) -> HTTPException:
 
 @router.post("/api/camera/open")
 def camera_open(request: Request) -> dict:
+    require_permission(request, "camera")  # madde 25: hassas işlem kapısı
     try:
         status = _service(request).open()
     except CameraError as exc:

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from .. import security
 from ..core import screen
 from ..store import database
-from .guards import require_not_guest
+from .guards import require_not_guest, require_permission
 
 router = APIRouter()
 
@@ -213,6 +213,7 @@ def screen_apps() -> dict:
 @router.post("/api/screen/analyze")
 def screen_analyze(payload: ScreenAnalyzeBody, request: Request) -> dict:
     require_not_guest(request)  # ekran bilgisi cihaz verisidir
+    require_permission(request, "screen_capture")  # madde 25
     result = screen.analyze_screen(payload.question.strip() or None)
     return result
 
@@ -220,6 +221,7 @@ def screen_analyze(payload: ScreenAnalyzeBody, request: Request) -> dict:
 @router.post("/api/screen/action")
 def screen_action(payload: ScreenActionBody, request: Request) -> dict:
     require_not_guest(request)
+    require_permission(request, "screen_capture")  # madde 25
     try:
         if payload.action == "scroll":
             return screen.scroll(payload.delta if payload.delta is not None else -600)

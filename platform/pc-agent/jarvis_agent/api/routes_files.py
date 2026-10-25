@@ -35,6 +35,7 @@ def list_files(request: object = None) -> dict:
 
 @router.post("/api/files/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)) -> dict:
+    guards.require_permission(request, "files.write")  # madde 25
     if file.size is not None and file.size > files_module.MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
@@ -96,6 +97,7 @@ def _notify_pc(result: dict) -> None:
 
 @router.delete("/api/files/{name}")
 def delete_file_endpoint(name: str, request: Request) -> dict:
+    guards.require_permission(request, "files.write")  # madde 25 (silme de yazma sayılır)
     """Paylaşılan dosyayı siler — kritik işlem: 2FA elevation ister (madde 15).
 
     Loopback (PC) istekleri güvenilir kabul edilir; uzak istemcilerden
@@ -114,7 +116,9 @@ def delete_file_endpoint(name: str, request: Request) -> dict:
 
 
 @router.get("/api/files/download")
-def download_file(name: str = Query(...)) -> FileResponse:
+def download_file(name: str = Query(...), request: Request = None) -> FileResponse:
+    if request is not None:
+        guards.require_permission(request, "files.read")  # madde 25
     safe = files_module.sanitize_name(name)
     try:
         data_path = files_module.shared_dir() / safe

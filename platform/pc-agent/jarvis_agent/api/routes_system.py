@@ -11,6 +11,7 @@ from ..core import counters
 from ..core import weather as weather_module
 from ..relay_client import wake_via_node
 from ..store import database
+from .guards import require_permission
 from .routes_integrations import build_integrations_payload
 
 router = APIRouter()
@@ -246,6 +247,7 @@ def shutdown_pc(request: Request) -> dict:
     """
     from .routes_critical import elevation_of, require_elevation
 
+    require_permission(request, "shutdown")  # madde 25: izin kapalıysa 403
     require_elevation(request)  # shutdown DAIMA 2FA elevation ister (loopback dahil)
     user = getattr(request.state, "user", None) or {}
     if not user.get("id"):

@@ -10,6 +10,7 @@ from starlette.responses import HTMLResponse
 
 from ..integrations import google_home
 from .. import security
+from .guards import require_permission
 
 router = APIRouter()
 logger = logging.getLogger("jarvis.api.smart_home")
@@ -68,6 +69,7 @@ class CommandBody(BaseModel):
 
 @router.post("/api/smart-home/command")
 def send_command(payload: CommandBody, request: Request) -> dict[str, Any]:
+    require_permission(request, "smart_home")  # madde 25: hassas işlem kapısı
     try:
         return google_home.command(_owner(request), payload.device_id, payload.action, payload.value)
     except ValueError as exc:
