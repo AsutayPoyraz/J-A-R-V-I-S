@@ -70,3 +70,19 @@ def capabilities_of(request: Any) -> dict[str, bool]:
 
 def session_payload(request: Any) -> dict[str, Any]:
     return {"mode": mode_of(request), "capabilities": capabilities_of(request)}
+
+
+def require_permission(request: Any, key: str) -> None:
+    """Madde 25: hassas işlem kapısı — owner bazlı izin kontrolü.
+
+    Varsayılan tüm izinler açıktır (geriye dönük uyum); owner kapattıysa
+    403 + code=permission_denied döner. Misafirler zaten uç başında reddedilir.
+    """
+    from ..store import section_g  # yerel import: döngüyü önle
+
+    owner = security.request_owner(request)
+    if not section_g.has_permission(owner, key):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "permission_denied", "permission": key},
+        )
