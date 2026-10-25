@@ -108,4 +108,126 @@ def list_secure_notes(owner_id: str) -> list[dict[str, Any]]:
         ).fetchall()
     return [dict(r) for r in rows]
 
-# __PART2__
+def delete_secure_note(owner_id: str, note_id: int) -> bool:
+    """Şifreli notu siler; yalnız sahibi silebilir. Misafir silmez."""
+    if database.is_guest(owner_id):
+        return False
+    with database._write_lock, database.closing(database.connect()) as conn, conn:
+        cur = conn.execute(
+            "DELETE FROM secure_notes WHERE owner_id = ? AND id = ?", (owner_id, note_id)
+        )
+    deleted = cur.rowcount > 0
+    if deleted:
+        audit(owner_id, "vault.note_deleted")
+    return deleted
+
+
+# ── Madde 25: hassas işlem izinleri ──────────────────────────────────────────
+
+def get_permissions(owner_id: str) -> dict[str, bool]:
+    """Varsayılan (tümü açık) + owner'ın kalıcı kapatmalarını birleştirir."""
+    perms: dict[str, bool] = {key: True for key in PERMISSIONS}
+    if database.is_guest(owner_id):
+        return perms
+    with database.closing(database.connect()) as conn:
+        rows = conn.execute(
+            "SELECT permission, allowed FROM permission_overrides WHERE owner_id = ?",
+            (owner_id,),
+        ).fetchall()
+    for row in rows:
+        if row["permission"] in perms:
+            perms[row["permission"]] = bool(row["allowed"])
+    return perms
+
+
+def set_permission(owner_id: str, permission: str, allowed: bool) -> None:
+    """Tek izni kalıcı açar/kapatır (misafir no-op; bilinmeyen anahtar yok sayılır)."""
+    if database.is_guest(owner_id) or permission not in PERMISSIONS:
+        return
+    with database._write_lock, database.closing(database.connect()) as conn, conn:
+        conn.execute(
+            "INSERT INTO permission_overrides (owner_id, permission, allowed, updated_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT(owner_id, permission) DO UPDATE SET "
+            "allowed = excluded.allowed, updated_at = excluded.updated_at",
+            (owner_id, permission, 1 if allowed else 0, _now()),
+        )
+    audit(owner_id, "permissions.change", detail=f"{permission}={allowed}")
+
+
+def has_permission(owner_id: str, permission: str) -> bool:
+    """Hassas uçların kapı fonksiyonu; bilinmeyen anahtar daima reddedilir."""
+    if permission not in PERMISSIONS:
+        return False
+    return get_permissions(owner_id).get(permission, False)
+
+
+# ── Madde 27: ruh hâli + günlük kullanım ─────────────────────────────────────
+
+def set_mood(owner_id: str, mood: str) -> bool:
+    """Günlük ruh hâlini user_settings'e yazar (sohbet üslubuna girdi)."""
+    if mood not in MOODS or database.is_guest(owner_id):
+        return False
+    database.update_user_settings(owner_id, {"mood": mood, "mood_updated_at": _now()})
+    return True
+
+
+def get_mood(owner_id: str) -> str:
+    mood = str(database.get_user_settings(owner_id).get("mood") or "neutral")
+    return mood if mood in MOODS else "neutral"
+
+
+def touch_usage(owner_id: str, delta_seconds: int | None = None) -> None:
+    """Günlük kullanım dakikalarını biriktirir (madde 27 limit kontrolü).
+
+    delta_seconds verilmezse son dokunuştan bu yana geçen süre kullanılır
+    (boşta bekleyen sekme süresini sınırlamak için 60 sn tavan). Misafir
+    hiç kayıt üretmez (madde 6).
+    """
+    if not owner_id or database.is_guest(owner_id):
+        return
+    now = _dt.datetime.now()
+    with database._write_lock, database.closing(database.connect()) as conn, conn:
+        delta = 0
+        if delta_seconds is None:
+            row = conn.execute(
+                "SELECT updated_at FROM usage_days WHERE owner_id = ? AND day = ?",
+                (owner_id, _today()),
+            ).fetchone()
+            if row and row["updated_at"]:
+                try:
+                    last = _dt.datetime.fromisoformat(str(row["updated_at"]))
+                    delta = int((now - last).total_seconds())
+                except ValueError:
+                    delta = 0
+            delta = max(0, min(delta, 60))
+        else:
+            delta = max(0, min(int(delta_seconds), 3600))
+        conn.execute(
+            "INSERT INTO usage_days (owner_id, day, minutes, updated_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT(owner_id, day) DO UPDATE SET "
+            "updated_at = excluded.updated_at",
+            (owner_id, _today(), 0, now.isoformat(timespec="seconds")),
+        )
+        add_minutes = delta // 60
+        if add_minutes:
+            conn.execute(
+                "UPDATE usage_days SET minutes = minutes + ? "
+                "WHERE owner_id = ? AND day = ?",
+                (add_minutes, owner_id, _today()),
+            )
+
+
+def usage_today(owner_id: str) -> dict[str, Any]:
+    """Bugünün kullanım dakikaları + günlük limit durumu."""
+    limit = int(database.get_user_settings(owner_id).get("daily_limit_minutes") or 0)
+    with database.closing(database.connect()) as conn:
+        row = conn.execute(
+            "SELECT minutes FROM usage_days WHERE owner_id = ? AND day = ?",
+            (owner_id, _today()),
+        ).fetchone()
+    minutes = int(row["minutes"]) if row else 0
+    return {
+        "minutes": minutes,
+        "limit": limit,
+        "limit_reached": bool(limit and minutes >= limit),
+    }
