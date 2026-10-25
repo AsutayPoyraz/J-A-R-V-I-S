@@ -17,6 +17,28 @@ from ..store import database
 router = APIRouter()
 
 
+def _clamp_int(value: int | None, low: int, high: int, default: int) -> int:
+    """Değeri [low, high] aralığına sıkıştırır; None/bozuk değerde default döner."""
+    if value is None:
+        return default
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, v))
+
+
+def _clamp_float(value: float | None, low: float, high: float, default: float) -> float:
+    """Değeri [low, high] aralığına sıkıştırır; None/bozuk değerde default döner."""
+    if value is None:
+        return default
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, v))
+
+
 class SettingsUpdate(BaseModel):
     """Kısmi ayar güncellemesi; yalnızca gönderilen alanlar değişir."""
 
@@ -33,6 +55,19 @@ class SettingsUpdate(BaseModel):
     tts_voice: str | None = None
     # Özel palet: {"accent": "r g b", "accent_soft": "r g b", "bg_page": "#hex"}
     custom_palette: dict[str, str] | None = None
+    # Bölüm G (madde 25/26/27): gizlilik, arayüz, iyi oluş
+    privacy_mode: bool | None = None
+    auto_lock_minutes: int | None = None
+    persona_name: str | None = None
+    persona_style: str | None = None
+    font_scale: float | None = None
+    dyslexic_font: bool | None = None
+    high_contrast: bool | None = None
+    break_reminder_minutes: int | None = None
+    daily_limit_minutes: int | None = None
+    focus_mode: bool | None = None
+    # Sürükle-bırak widget sırası (madde 26); boş liste → sıfırla
+    dashboard_layout: list[str] | None = None
 
 
 @router.get("/api/settings")
@@ -58,6 +93,26 @@ def get_settings(request: Request) -> dict:
         "tts_rate": _tts_rate(row),
         "tts_voice": _tts_voice(row),
         "twofa_enabled": bool(row.get("twofa_enabled", 1)),
+        # Bölüm G: gizlilik / arayüz / iyi oluş alanları (madde 25/26/27)
+        "privacy_mode": bool(row.get("privacy_mode")),
+        "auto_lock_minutes": _clamp_int(row.get("auto_lock_minutes"), 0, 1440, 0),
+        "persona_name": str(row.get("persona_name") or ""),
+        "persona_style": (
+            row.get("persona_style")
+            if row.get("persona_style") in config.ALLOWED_PERSONA_STYLES
+            else "classic"
+        ),
+        "font_scale": _clamp_float(row.get("font_scale"), 0.8, 1.5, 1.0),
+        "dyslexic_font": bool(row.get("dyslexic_font")),
+        "high_contrast": bool(row.get("high_contrast")),
+        "break_reminder_minutes": _clamp_int(row.get("break_reminder_minutes"), 0, 240, 0),
+        "daily_limit_minutes": _clamp_int(row.get("daily_limit_minutes"), 0, 1440, 0),
+        "focus_mode": bool(row.get("focus_mode")),
+        "mood": str(row.get("mood") or "neutral"),
+        "dashboard_layout": _dashboard(row),
+        # İstemcinin seçim menüleri için izinli değerler
+        "allowed_persona_styles": list(config.ALLOWED_PERSONA_STYLES),
+        "allowed_widgets": list(config.ALLOWED_WIDGETS),
         # "guest" test sözleşmesi; owner_is_guest geriye dönük uyumluluk için.
         "guest": database.is_guest(owner),
         "owner_is_guest": database.is_guest(owner),
@@ -100,6 +155,29 @@ def _tts_rate(row: dict) -> float:
 def _tts_voice(row: dict) -> str:
     voice = row.get("tts_voice")
     return voice if voice in config.ALLOWED_TTS_VOICES else config.DEFAULT_TTS_VOICE
+
+
+def _dashboard(row: dict) -> list[str]:
+    """Madde 26: sürükle-bırak widget sırası.
+
+    DB'de JSON string olarak saklanır; bozuk/eksikse ALLOWED_WIDGETS
+    varsayılan sırası döner. Geçersiz widget kimlikleri dışlanır.
+    """
+    import json as _json
+
+    raw = row.get("dashboard_layout")
+    if raw:
+        try:
+            parsed = _json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, list):
+            allowed = set(config.ALLOWED_WIDGETS)
+            layout = [w for w in parsed if isinstance(w, str) and w in allowed]
+            # Eksik widget'ları sona ekle (yeni widgetlar da görünsün).
+            layout += [w for w in config.ALLOWED_WIDGETS if w not in layout]
+            return layout
+    return list(config.ALLOWED_WIDGETS)
 
 
 @router.put("/api/settings")
