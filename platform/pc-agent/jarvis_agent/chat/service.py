@@ -81,14 +81,37 @@ _MODE_TONE = {
 
 
 def build_system_prompt(
-    language: str = "tr", mode: str = "adaptive", mood: str = "neutral"
+    language: str = "tr",
+    mode: str = "adaptive",
+    mood: str = "neutral",
+    persona_name: str = "",
+    persona_style: str = "classic",
 ) -> str:
-    """Madde 3 + 1 + 27: dil, konuşma modu ve ruh hâli promptu belirler."""
+    """Madde 3+1+26+27: dil, mod, ruh hâli ve kişilik promptu belirler."""
     lang = language if language in config.ALLOWED_LANGUAGES else "tr"
     if mode not in config.ALLOWED_CONVERSATION_MODES:
         mode = config.DEFAULT_CONVERSATION_MODE
     base = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_TR
     prompt = f"{base} {_MODE_TONE[mode][lang]}"
+    # Madde 26: kişilik özelleştirme — isim + stil prompt'a yansır.
+    name = (persona_name or "").strip()[:40]
+    style = persona_style if persona_style in config.ALLOWED_PERSONA_STYLES else "classic"
+    if name:
+        if lang == "en":
+            prompt += f" Address the user as \"{name}\"."
+        else:
+            prompt += f" Kullanıcıya \"{name}\" diye hitap et."
+    style_hint_en = {
+        "friendly": " Keep an extra warm, friendly tone.",
+        "concise": " Be extra concise; answer in as few words as possible.",
+        "funny": " Add light, tasteful humor when appropriate.",
+    }
+    style_hint_tr = {
+        "friendly": " Ekstra sıcak ve samimi bir ton kullan.",
+        "concise": " Son derece kısa yanıt ver; gereksiz söz kullanma.",
+        "funny": " Uygun olduğunda hafif ve zarif espri ekle.",
+    }
+    prompt += (style_hint_en if lang == "en" else style_hint_tr).get(style, "")
     # Madde 27: mood tracker — üslup, kullanıcının ruh hâline göre ayarlanır.
     mood_hint = {
         "tr": {
@@ -124,6 +147,8 @@ async def run_chat(
     language: str = "tr",
     mode: str = "adaptive",
     mood: str = "neutral",
+    persona_name: str = "",
+    persona_style: str = "classic",
 ) -> dict[str, Any]:
     """Bir kullanıcı iletisini uçtan uca işler.
 
@@ -157,7 +182,9 @@ async def run_chat(
     llm_messages: list[dict] = [
         {
             "role": "system",
-            "content": build_system_prompt(language, mode, mood) + memory_block,
+            "content": build_system_prompt(
+                language, mode, mood, persona_name, persona_style
+            ) + memory_block,
         }
     ]
     if persist:

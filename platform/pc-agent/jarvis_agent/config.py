@@ -36,6 +36,13 @@ ALLOWED_BG_COLORS = ("maroon", "light", "dark", "custom", "red", "green", "blue"
 ALLOWED_PALETTE_KEYS = ("accent", "accent_soft", "bg_page")
 # Prompt 3: konuşma modları
 ALLOWED_CONVERSATION_MODES = ("formal", "casual", "adaptive")
+# Bölüm G (madde 26): kişilik stilleri + sürükle-bırak panel düzenindeki
+# geçerli widget kimlikleri (dashboard_layout JSON'u bunlarla sınırlıdır).
+ALLOWED_PERSONA_STYLES = ("classic", "friendly", "concise", "funny")
+ALLOWED_WIDGETS = (
+    "social", "agent", "files", "weather", "system", "reminders",
+    "smart_home", "camera", "uptime", "privacy", "wellbeing",
+)
 
 # Kullanıcı ayarları için izinli değerler (kullanıcıya özel ayarlar DB'de tutulur).
 ALLOWED_LANGUAGES = ("tr", "en")

@@ -76,6 +76,19 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
 
     # Madde 3/1: dil ve konuşma modu sahibinin user_settings'inden gelir.
     owner_prefs = database.get_user_settings(owner_id)
+    # ── Madde 27: günlük kullanım limiti — aşıldıysa sohbet 429 ile reddedilir.
+    from ..store import section_g  # yerel import: daireden bağımsız kullanım
+
+    if not guest:
+        section_g.touch_usage(owner_id)
+        if section_g.usage_today(owner_id).get("limit_reached"):
+            raise HTTPException(
+                status_code=429,
+                detail="Günlük kullanım limitine ulaşıldı. Yarın tekrar deneyin.",
+            )
+    # ── Madde 26: kişilik (isim/stil) — prompt'u şekillendirir.
+    persona_name = str(owner_prefs.get("persona_name") or "")
+    persona_style = str(owner_prefs.get("persona_style") or "classic")
     # ── Madde 22: özel komutlar — eşleşirse LLM'e gitmeden yürütülür ──
     cmd = database.match_custom_command(owner_id, message)
     if cmd is not None:
@@ -111,9 +124,13 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         request.app.state.stats,
         source="text",
         owner_id=owner_id,
-        persist=not guest,
+        # Madde 25 (Privacy Mode): gizli sohbet DB'ye yazılmaz (log tutulmaz).
+        persist=(not guest) and not bool(owner_prefs.get("privacy_mode")),
         language=owner_prefs.get("language") or "tr",
         mode=owner_prefs.get("conversation_mode") or "adaptive",
+        mood=owner_prefs.get("mood") or "neutral",
+        persona_name=persona_name,
+        persona_style=persona_style,
     )
     # Bölüm F (madde 21): sohbet XP'si — sunucu tarafında, misafir hariç.
     section_f.award_xp(owner_id, "chat")
