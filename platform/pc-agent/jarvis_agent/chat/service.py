@@ -80,13 +80,33 @@ _MODE_TONE = {
 }
 
 
-def build_system_prompt(language: str = "tr", mode: str = "adaptive") -> str:
-    """Madde 3 + Madde 1: dil ve konuşma modu sistem promptunu belirler."""
+def build_system_prompt(
+    language: str = "tr", mode: str = "adaptive", mood: str = "neutral"
+) -> str:
+    """Madde 3 + 1 + 27: dil, konuşma modu ve ruh hâli promptu belirler."""
     lang = language if language in config.ALLOWED_LANGUAGES else "tr"
     if mode not in config.ALLOWED_CONVERSATION_MODES:
         mode = config.DEFAULT_CONVERSATION_MODE
     base = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_TR
-    return f"{base} {_MODE_TONE[mode][lang]}"
+    prompt = f"{base} {_MODE_TONE[mode][lang]}"
+    # Madde 27: mood tracker — üslup, kullanıcının ruh hâline göre ayarlanır.
+    mood_hint = {
+        "tr": {
+            "focused": " Kullanıcı odaklanmış: kısa, doğrudan ve madde madde yanıt ver.",
+            "tired": " Kullanıcı yorgun: sade anlat, uzun listelerden kaçın.",
+            "stressed": " Kullanıcı stresli: sakin ve kısa bir ton kullan.",
+            "cheerful": " Kullanıcı neşeli: enerjik ve pozitif bir ton sergile.",
+            "neutral": "",
+        },
+        "en": {
+            "focused": " The user is focused: be brief, direct and bullet-pointed.",
+            "tired": " The user is tired: keep it light, avoid long lists.",
+            "stressed": " The user is stressed: use a calm, reassuring tone.",
+            "cheerful": " The user is cheerful: mirror an upbeat, positive tone.",
+            "neutral": "",
+        },
+    }[lang].get(mood, "")
+    return prompt + mood_hint
 
 
 # Geriye dönük takma ad: testler ve diğer modüller TR promptu tek isimden okur.
@@ -103,6 +123,7 @@ async def run_chat(
     owner_id: str = "local",
     language: str = "tr",
     mode: str = "adaptive",
+    mood: str = "neutral",
 ) -> dict[str, Any]:
     """Bir kullanıcı iletisini uçtan uca işler.
 
@@ -136,7 +157,7 @@ async def run_chat(
     llm_messages: list[dict] = [
         {
             "role": "system",
-            "content": build_system_prompt(language, mode) + memory_block,
+            "content": build_system_prompt(language, mode, mood) + memory_block,
         }
     ]
     if persist:

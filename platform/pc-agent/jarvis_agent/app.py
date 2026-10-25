@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from . import auth
+from . import observability  # madde 31: Sentry (opsiyonel; SENTRY_DSN ile aktif)
 from .relay_client import RelayClient, wake_via_node
 from .api import (
     routes_auth,
@@ -38,6 +39,7 @@ from .api import routes_reminders
 from .api import routes_agent
 from .api import routes_social
 from .api import routes_productivity
+from .api import routes_privacy
 from .api import ws as ws_module
 from .camera.service import CameraService
 from .core import counters
@@ -49,6 +51,10 @@ from .store import database
 from .voice.service import VoiceService
 
 logger = logging.getLogger("jarvis.app")
+
+# Madde 31: Sentry DSN .env'de tanımlıysa erken başlat; hassas alan filtresi
+# (observability.scrub_event) tüm olaylara uygulanır. DSN yoksa no-op'tur.
+observability.init_sentry()
 
 
 def _relay_command_handler(message: dict) -> Optional[dict]:
@@ -269,6 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_smart_home.router)
     app.include_router(routes_social.router)
     app.include_router(routes_productivity.router)
+    app.include_router(routes_privacy.router)  # madde 25 + 27
     app.include_router(ws_module.router)
 
     @app.on_event("startup")
