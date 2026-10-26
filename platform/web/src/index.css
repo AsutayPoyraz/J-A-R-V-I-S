@@ -353,3 +353,27 @@ html[data-chat-position="center"] .chat-panel-aside {
     min-height: 60vh;
   }
 }
+
+/* ===== Bolum G: erisilebilirlik (madde 26) ===== */
+html.jarvis-dyslexic,
+html.jarvis-dyslexic button,
+html.jarvis-dyslexic input,
+html.jarvis-dyslexic textarea,
+html.jarvis-dyslexic select {
+  font-family: Verdana, 'Comic Sans MS', 'Trebuchet MS', sans-serif !important;
+  letter-spacing: 0.03em;
+  word-spacing: 0.08em;
+}
+html.jarvis-high-contrast {
+  filter: contrast(1.25) saturate(1.1);
+}
+html.jarvis-high-contrast * {
+  text-shadow: none !important;
+}
+html.jarvis-high-contrast :focus-visible {
+  outline: 3px solid #ffbf47 !important;
+  outline-offset: 2px;
+}
+body {
+  zoom: var(--jarvis-font-scale, 1);
+}

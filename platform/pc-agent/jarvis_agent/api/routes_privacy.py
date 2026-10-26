@@ -133,10 +133,13 @@ def health_wellbeing(ctx: dict = Depends(_ctx)) -> dict:
     """Mood + günlük kullanım + mola/limit ayarları tek yanıtta."""
     row = database.get_user_settings(ctx["owner_id"])
     usage = section_g.usage_today(ctx["owner_id"])
+    used_minutes = int(usage.get("minutes", 0))
     return {
         "mood": section_g.get_mood(ctx["owner_id"]),
         "moods": list(section_g.MOODS),
-        "used_seconds": usage.get("used_seconds", 0),
+        # usage_today dakika sayar; saniye cinsinden uyumluluk için *60.
+        "used_minutes": used_minutes,
+        "used_seconds": used_minutes * 60,
         "daily_limit_minutes": int(row.get("daily_limit_minutes") or 0),
         "focus_mode": bool(row.get("focus_mode", 0)),
         "break_reminder_minutes": int(row.get("break_reminder_minutes") or 0),

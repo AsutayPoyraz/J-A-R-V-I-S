@@ -8,6 +8,8 @@ Kurallar:
 """
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -225,7 +227,6 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
             )
         patch["tts_rate"] = round(payload.tts_rate, 2)
     if payload.custom_palette is not None:
-        import json
         import re
 
         rgb = re.compile(r"^\d{1,3} \d{1,3} \d{1,3}$")
@@ -244,6 +245,49 @@ def update_settings(request: Request, payload: SettingsUpdate) -> dict:
                     raise HTTPException(status_code=422, detail="Geçersiz renk değeri.")
             palette[key] = value
         patch["custom_palette"] = json.dumps(palette) if palette else ""
+
+    # ── Bölüm G (madde 25/26/27): gizlilik, arayüz, iyi oluş alanları ───────
+    if payload.privacy_mode is not None:
+        patch["privacy_mode"] = "1" if payload.privacy_mode else "0"
+    if payload.auto_lock_minutes is not None:
+        if not (0 <= payload.auto_lock_minutes <= 1440):
+            raise HTTPException(status_code=422, detail="Otomatik kilit 0-1440 dk olmalı.")
+        patch["auto_lock_minutes"] = str(int(payload.auto_lock_minutes))
+    if payload.persona_name is not None:
+        name = payload.persona_name.strip()
+        if len(name) > 40:
+            raise HTTPException(status_code=422, detail="Kişilik adı en fazla 40 karakter.")
+        patch["persona_name"] = name
+    if payload.persona_style is not None:
+        if payload.persona_style not in config.ALLOWED_PERSONA_STYLES:
+            raise HTTPException(status_code=422, detail="Geçersiz kişilik stili.")
+        patch["persona_style"] = payload.persona_style
+    if payload.font_scale is not None:
+        if not (0.8 <= payload.font_scale <= 1.5):
+            raise HTTPException(status_code=422, detail="Yazı ölçeği 0.8-1.5 olmalı.")
+        patch["font_scale"] = str(round(payload.font_scale, 2))
+    if payload.dyslexic_font is not None:
+        patch["dyslexic_font"] = "1" if payload.dyslexic_font else "0"
+    if payload.high_contrast is not None:
+        patch["high_contrast"] = "1" if payload.high_contrast else "0"
+    if payload.break_reminder_minutes is not None:
+        if not (0 <= payload.break_reminder_minutes <= 240):
+            raise HTTPException(status_code=422, detail="Mola hatırlatıcı 0-240 dk olmalı.")
+        patch["break_reminder_minutes"] = str(int(payload.break_reminder_minutes))
+    if payload.daily_limit_minutes is not None:
+        if not (0 <= payload.daily_limit_minutes <= 1440):
+            raise HTTPException(status_code=422, detail="Günlük limit 0-1440 dk olmalı.")
+        patch["daily_limit_minutes"] = str(int(payload.daily_limit_minutes))
+    if payload.focus_mode is not None:
+        patch["focus_mode"] = "1" if payload.focus_mode else "0"
+    if payload.dashboard_layout is not None:
+        # Sıra doğrulaması: yalnızca bilinen widget'lar; bilinmeyenler atılır.
+        allowed = set(config.ALLOWED_WIDGETS)
+        seen: list[str] = []
+        for wid in payload.dashboard_layout:
+            if wid in allowed and wid not in seen:
+                seen.append(wid)
+        patch["dashboard_layout"] = json.dumps(seen)
 
     if patch:
         database.update_user_settings(owner, patch)

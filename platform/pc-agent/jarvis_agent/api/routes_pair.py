@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from .. import config, security
+from ..store import database  # madde 25: eşleşme olayları denetim günlüğüne yazılır
 
 router = APIRouter()
 
@@ -82,6 +83,12 @@ def claim(payload: ClaimBody) -> dict:
     result = security.claim(payload.code, payload.device_name)
     if result is None:
         raise HTTPException(status_code=400, detail="Kod geçersiz veya süresi doldu.")
+    # Madde 25: cihaz eşleşmeleri güvenlik denetim kaydına yazılır.
+    database.audit(
+        "pair.claim",
+        actor=str(result.get("owner_id") or payload.device_name)[:60],
+        detail=str(payload.device_name)[:60],
+    )
     return result
 
 
@@ -94,4 +101,5 @@ def remove_device(device_id: str, request: Request) -> dict:
     require_elevation(request)
     if not security.revoke(device_id):
         raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
+    database.audit("pair.revoke", actor="elevated", detail=str(device_id)[:60])
     return {"revoked": device_id}

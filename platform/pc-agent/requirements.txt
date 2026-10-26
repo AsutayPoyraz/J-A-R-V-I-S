@@ -32,3 +32,6 @@ pyjwt==2.10.1                # JWT access/refresh token'ları
 # Bölüm E — ekran analizi ve otomasyon (madde 9)
 Pillow==11.1.0               # ekran görüntüsü yakalama (ImageGrab)
 pyautogui==0.9.9             # sınırlı GUI otomasyonu (JARVIS_GUI_AUTOMATION=1)
+
+# Bölüm G — gözlemlenebilirlik (madde 31): opsiyonel Sentry
+sentry-sdk[fastapi]==2.19.2  # SENTRY_DSN boşsa tamamen pasif kalır

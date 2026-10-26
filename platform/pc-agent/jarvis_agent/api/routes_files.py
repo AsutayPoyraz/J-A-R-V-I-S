@@ -27,7 +27,9 @@ router = APIRouter()
 
 
 @router.get("/api/files")
-def list_files(request: object = None) -> dict:
+def list_files(request: Request = None) -> dict:
+    if request is not None:
+        guards.require_permission(request, "files.read")  # madde 25
     data = files_module.list_files()
     data["uploads_directory"] = str(files_module.uploads_dir())
     return data

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>JARVIS Eklenti Ayarları</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 24px auto; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input { width: 100%; padding: 6px; box-sizing: border-box; }
+    button { margin-top: 16px; padding: 8px 16px; }
+    #status { color: #8b0000; margin-top: 8px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <h2>JARVIS Eklenti Ayarları</h2>
+  <label>JARVIS sunucu adresi (base URL)</label>
+  <input id="baseUrl" placeholder="http://127.0.0.1:8000" />
+  <label>Access Token (JWT)</label>
+  <input id="token" type="password" placeholder="jwt access token" />
+  <label>Client ID (cihaz kimliği)</label>
+  <input id="clientId" placeholder="ext-1" />
+  <button id="save">Kaydet</button>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>
