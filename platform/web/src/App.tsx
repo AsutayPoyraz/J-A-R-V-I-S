@@ -15,6 +15,7 @@ import UptimeCard from "./components/UptimeCard";
 import ReminderCard from "./components/ReminderCard";
 import AgentCard from "./components/AgentCard";
 import SocialCard from "./components/SocialCard";
+import PrivacyWellnessCard from "./components/PrivacyWellnessCard";
 import PairCard from "./components/PairCard";
 import FileTransferCard from "./components/FileTransferCard";
 import CenterStage from "./components/CenterStage";
@@ -104,6 +105,7 @@ export default function App() {
       </GuestLocked>
       <GuestLocked title="Social" allowed={session.can("history")}>
         <SocialCard />
+        <PrivacyWellnessCard />
       </GuestLocked>
       <GuestLocked title="Camera" allowed={session.can("device_control")}>
         <CameraCard

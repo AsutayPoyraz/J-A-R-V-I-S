@@ -377,3 +377,27 @@ html.jarvis-high-contrast :focus-visible {
 body {
   zoom: var(--jarvis-font-scale, 1);
 }
+
+/* __SECTION_G_CSS__ : accessibility + privacy card (Section G) */
+[data-font-scale="sm"] { font-size: 14px; }
+[data-font-scale="md"] { font-size: 16px; }
+[data-font-scale="lg"] { font-size: 18px; }
+[data-a11y-font="dyslexic"] body, [data-a11y-font="dyslexic"] button, [data-a11y-font="dyslexic"] input,
+[data-a11y-font="dyslexic"] select, [data-a11y-font="dyslexic"] textarea {
+  font-family: "OpenDyslexic", "Comic Sans MS", Verdana, sans-serif !important; letter-spacing: 0.03em; line-height: 1.6;
+}
+[data-contrast="high"] { --primary: #ffd400; --text: #ffffff; --bg: #000000; }
+[data-contrast="high"] body { background: #000; color: #fff; }
+[data-contrast="high"] .card, [data-contrast="high"] .pw-note { border-color: #ffd400; }
+.pw-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.pw-tab { border: 1px solid var(--border, #bbb3); background: transparent; border-radius: 8px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
+.pw-tab.pw-on { background: var(--primary, #8B0000); color: #fff; border-color: transparent; }
+.pw-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 5px 0; }
+.pw-row input[type="text"], .pw-row input[type="password"], .pw-row input[type="number"], .pw-row textarea, .pw-row select { flex: 1; min-width: 0; }
+.pw-desc { opacity: 0.75; font-size: 12px; margin: 4px 0; }
+.pw-note { border: 1px solid var(--border, #bbb3); border-radius: 8px; padding: 6px 9px; margin: 6px 0; }
+.pw-mood { display: flex; gap: 6px; flex-wrap: wrap; }
+.pw-chip { display: inline-block; border: 1px solid #8883; border-radius: 999px; padding: 1px 8px; margin: 2px; font-size: 11px; }
+.pw-err { color: #dc2626; font-size: 12px; margin: 4px 0; }
+.pw-ok { color: #15803d; font-size: 12px; margin: 4px 0; }
+.pw-body { white-space: pre-wrap; font-size: 12px; margin: 4px 0 0; }

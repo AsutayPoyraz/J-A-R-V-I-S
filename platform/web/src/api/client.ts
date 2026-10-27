@@ -216,6 +216,18 @@ export const api = {
       custom_palette: Record<string, string>;
       tts_voice: string;
       tts_rate: number;
+      /** Bölüm G (madde 25/26/27): gizlilik, kişilik, erişilebilirlik, sağlık. */
+      privacy_mode: boolean;
+      auto_lock_minutes: number;
+      persona_name: string;
+      persona_style: string;
+      font_scale: number;
+      dyslexic_font: boolean;
+      high_contrast: boolean;
+      break_reminder_minutes: number;
+      daily_limit_minutes: number;
+      focus_mode: boolean;
+      dashboard_layout: string[];
     }>
   ) =>
     request<import("../types").AppSettings>("/api/settings", {
@@ -464,3 +476,57 @@ export const api = {
       body: JSON.stringify({ data }),
     }),
 };
+
+/** Bölüm G: gizlilik/sağlık uçları — /api önekli yardımcı.
+ * Gövde nesneyse otomatik JSON'a çevrilir; auth/refresh `request` içinde. */
+type PrivInit = Omit<RequestInit, "body"> & { body?: unknown };
+async function privReq<T = unknown>(path: string, init: PrivInit = {}): Promise<T> {
+  const raw: unknown = init.body;
+  const body =
+    raw === undefined || typeof raw === "string"
+      ? (raw as BodyInit | undefined)
+      : JSON.stringify(raw);
+  return request<T>(`/api${path}`, { ...init, body } as RequestInit);
+}
+
+export async function fetchPrivacyNotes(): Promise<unknown> {
+  return privReq("/privacy/notes", { method: "GET" });
+}
+
+export async function createPrivacyNote(payload: Record<string, unknown>): Promise<unknown> {
+  return privReq("/privacy/notes", { method: "POST", body: payload });
+}
+
+export async function deletePrivacyNote(id: string | number): Promise<unknown> {
+  return privReq(`/privacy/notes/${id}`, { method: "DELETE" });
+}
+
+export async function fetchPrivacyPermissions(): Promise<unknown> {
+  return privReq("/privacy/permissions", { method: "GET" });
+}
+
+export async function fetchPrivacyAudit(): Promise<unknown> {
+  return privReq("/privacy/audit", { method: "GET" });
+}
+
+/** Hassas işlem iznini aç/kapa (madde 25; guards.require_permission uygular). */
+export async function setPrivacyPermission(key: string, allowed: boolean): Promise<unknown> {
+  return privReq(`/privacy/permissions/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: { allowed },
+  });
+}
+
+/** Madde 27: ruh hâli + günlük kullanım + mola/limit ayarları. */
+export async function fetchWellbeing(): Promise<unknown> {
+  return privReq("/health/wellbeing", { method: "GET" });
+}
+
+export async function putMood(mood: string): Promise<unknown> {
+  return privReq("/health/mood", { method: "PUT", body: { mood } });
+}
+
+/** Güvenlik denetim kaydını CSV olarak indir (madde 25). */
+export function auditCsv(days = 90): Promise<Blob> {
+  return requestBlob(`/api/privacy/audit/export.csv?days=${days}`);
+}

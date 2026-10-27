@@ -122,6 +122,20 @@ export interface AppSettings {
   /** Madde 14: TTS ses (tr/en) ve hız (0.5-2.0x) tercihleri. */
   tts_voice: string;
   tts_rate: number;
+  /** Bölüm G (madde 25/26/27): gizlilik, kişilik, erişilebilirlik, sağlık. */
+  privacy_mode?: boolean;
+  auto_lock_minutes?: number;
+  persona_name?: string;
+  persona_style?: string;
+  font_scale?: number;
+  dyslexic_font?: boolean;
+  high_contrast?: boolean;
+  break_reminder_minutes?: number;
+  daily_limit_minutes?: number;
+  focus_mode?: boolean;
+  mood?: string;
+  dashboard_layout?: string[];
+  allowed_persona_styles?: string[];
   allowed_background_colors: BackgroundColor[];
   allowed_conversation_modes?: ConversationMode[];
   allowed_tts_voices?: string[];
@@ -260,3 +274,12 @@ export interface HistoryResult {
   tags?: string;
   created_at: string;
 }
+
+// ===== Section G: Privacy / Wellness / A11y (auto) =====
+export interface PrivacyNoteItem { id: string; title: string; created_at?: string; content?: string; [k: string]: unknown; }
+export interface PrivacyVaultStatus { locked?: boolean; auto_lock_minutes?: number; privacy_mode?: boolean; [k: string]: unknown; }
+export interface PermissionState { [k: string]: boolean; }
+export interface AuditLogEntry { id?: string; ts?: string; action?: string; detail?: string; [k: string]: unknown; }
+export interface MoodEntryItem { id?: string; mood?: string; note?: string; ts?: string; [k: string]: unknown; }
+export interface WellbeingSummaryData { focus_mode?: boolean; daily_limit?: number; used_today?: number; last_mood?: string; [k: string]: unknown; }
+export interface GAccessibilitySettings { font_size?: string; dyslexic_font?: boolean; high_contrast?: boolean; [k: string]: unknown; }
