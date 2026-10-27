@@ -68,6 +68,9 @@ const tr: Dict = {
   "settings.exit_phrases": "Sesli Mod Çıkış İfadeleri (virgülle)",
   "settings.clap": "Çift Alkış ile Uyandırma",
   "settings.clap_sensitivity": "Alkış Hassasiyeti",
+  "settings.clap_desc": "Asistan dinlerken çift alkış sesini algılayıp uyandırır.",
+  "settings.exit_phrases_placeholder": "örn: jarvis kapan, sus, yeter",
+  "settings.exit_hint": "Bu ifadeleri söylediğinde sesli moddan çıkılır.",
   "settings.less_sensitive": "Daha az duyarlı",
   "settings.more_sensitive": "Daha duyarlı",
   "integrations.ready": "Hazır",
@@ -339,6 +342,9 @@ const en: Dict = {
   "settings.exit_phrases": "Voice mode exit phrases (comma-separated)",
   "settings.clap": "Wake on double clap",
   "settings.clap_sensitivity": "Clap sensitivity",
+  "settings.clap_desc": "Wakes the assistant by detecting a double clap while it is listening.",
+  "settings.exit_phrases_placeholder": "e.g. jarvis off, quiet, that's all",
+  "settings.exit_hint": "Say one of these phrases to leave voice mode.",
   "settings.less_sensitive": "Less sensitive",
   "settings.more_sensitive": "More sensitive",
   "integrations.ready": "Ready",
@@ -556,6 +562,9 @@ const en: Dict = {
 };
 
 const DICTS: Record<Lang, Dict> = { tr, en };
+
+/** Test/arac erişimi için her iki sözlüğün salt-okunur görünümü. */
+export const translations: Readonly<Record<Lang, Dict>> = DICTS;
 
 let currentLang: Lang = detectInitialLang();
 const missing = new Set<string>();
