@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
     event TEXT NOT NULL,
     detail TEXT NOT NULL DEFAULT ''
 );
+-- Faz 4: denetim kaydı listeleme/CSV dışa aktarımı tarih sıralı okur.
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (ts);
 
 CREATE TABLE IF NOT EXISTS google_home_tokens (
     owner_id TEXT PRIMARY KEY,

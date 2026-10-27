@@ -36,3 +36,7 @@ jarvis.db
 jarvis-security.db
 *.db-wal
 *.db-shm
+
+# Faz 4: geliştirme scratch araçları ve loglar repoya girmez
+tools_g/
+*.log
