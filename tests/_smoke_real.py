@@ -6,9 +6,9 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 app = QApplication.instance() or QApplication([])
-import jarvis_v10
+import jarvis_v11
 
-win = jarvis_v10.JarvisWindow()
+win = jarvis_v11.JarvisWindow()
 win.show()
 QTest.qWait(700)
 win._toggle_atlas(True)

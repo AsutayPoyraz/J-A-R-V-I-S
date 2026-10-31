@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from ..chat.service import run_chat
 from ..core import counters
 from ..core import screen as screen_module
+from ..llm import router as llm_router
 from ..store import database
 from ..store import section_f  # Bölüm F: XP + activity (madde 20/21)
 from ..voice.textmatch import is_enter_voice_command
@@ -25,6 +26,8 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    # Özellik 18: sağlayıcı tercihi ("", "auto" → otomatik; gemini/deepseek/groq/llama...)
+    provider: str = Field(default="", max_length=24)
 
 
 @router.post("/api/chat")
@@ -89,6 +92,32 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
     # ── Madde 26: kişilik (isim/stil) — prompt'u şekillendirir.
     persona_name = str(owner_prefs.get("persona_name") or "")
     persona_style = str(owner_prefs.get("persona_style") or "classic")
+    # ── Özellik 9.4: makro tetikleyicisi — eşleşirse LLM'e gitmeden yürütülür ──
+    from ..store import v11 as _v11
+    from ..api.routes_macros import run_macro  # yürütücü aynı hattı paylaşır
+
+    macro = _v11.find_macro_by_trigger(owner_id, message)
+    if macro is not None and not guest:
+        try:
+            result = await run_macro(int(macro["id"]), request)
+            reply_parts = []
+            for output in result.get("outputs") or []:
+                if output.get("type") == "chat" and output.get("reply"):
+                    reply_parts.append(str(output["reply"]))
+            reply = "\n\n".join(reply_parts) or f"'{macro['name']}' makrosu çalıştırıldı."
+        except Exception as exc:  # noqa: BLE001 — makro hatası kullanıcıya net döner
+            logger.exception("Makro çalıştırılamadı: %s", macro.get("name"))
+            reply = f"'{macro.get('name')}' makrosu çalıştırılırken hata oluştu: {exc}"
+        database.add_message("user", message, owner_id=owner_id)
+        database.add_message("assistant", reply, owner_id=owner_id)
+        database.audit("chat.macro_trigger", detail=str(macro.get("name"))[:100])
+        return {
+            "reply": reply,
+            "used_tools": ["macro"],
+            "provider": "macro",
+            "model": macro.get("name", ""),
+            "error": False,
+        }
     # ── Madde 22: özel komutlar — eşleşirse LLM'e gitmeden yürütülür ──
     cmd = database.match_custom_command(owner_id, message)
     if cmd is not None:
@@ -131,8 +160,87 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         mood=owner_prefs.get("mood") or "neutral",
         persona_name=persona_name,
         persona_style=persona_style,
+        provider_name=payload.provider,
     )
     # Bölüm F (madde 21): sohbet XP'si — sunucu tarafında, misafir hariç.
     section_f.award_xp(owner_id, "chat")
     section_f.log_activity(owner_id, "chat", message[:60])
     return result
+
+
+class CompareRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    providers: list[str] = Field(default_factory=list, max_length=6)
+
+
+@router.post("/api/chat/compare")
+async def chat_compare(payload: CompareRequest, request: Request) -> dict:
+    """Özellik 12: aynı soruyu birden çok sağlayıcıya paralel gönderir.
+
+    Yalnızca giriş yapmış kullanıcılar (misafir 403). Yalnızca API anahtarı
+    yapılandırılmış sağlayıcılar dahil edilir; her sonuç
+    {provider, response, latency_ms, tokens_used, model, error} biçimindedir.
+    """
+    from .. import auth as auth_module
+    from ..llm.system_prompt import SYSTEM_PROMPT_TR
+
+    if security.is_guest(request):
+        raise HTTPException(
+            status_code=403, detail="Karşılaştırma modu için giriş yapmalısınız."
+        )
+    if not auth_module.auth_available():
+        raise HTTPException(
+            status_code=503, detail="Karşılaştırma için JWT yapılandırması gerekli."
+        )
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(
+            status_code=401, detail="Karşılaştırma modu yalnızca üyelere açıktır."
+        )
+    user_id = str(user.get("id") or "")
+
+    import asyncio
+    import time
+
+    message = payload.message.strip()
+    requested = [p.strip().lower() for p in payload.providers if p.strip()]
+    candidates = [p for p in requested if p != "mock"] or llm_router.PROVIDER_PRIORITY
+    targets = [p for p in candidates if llm_router.is_configured(p, user_id)][:4]
+    if not targets:
+        raise HTTPException(
+            status_code=422,
+            detail="Karşılaştırılacak yapılandırılmış sağlayıcı yok (API anahtarı gerekli).",
+        )
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT_TR},
+        {"role": "user", "content": message},
+    ]
+
+    async def _run(name: str) -> dict:
+        started = time.perf_counter()
+        try:
+            provider = llm_router.build_provider_for(name, user_id)
+            result = await provider.chat(messages)
+            latency = int((time.perf_counter() - started) * 1000)
+            return {
+                "provider": name,
+                "response": result.content.strip(),
+                "latency_ms": latency,
+                "tokens_used": result.tokens_used,
+                "model": result.model or provider.model,
+                "error": "",
+            }
+        except Exception as exc:  # noqa: BLE001 — tek sağlayıcı hatası turu bozmaz
+            latency = int((time.perf_counter() - started) * 1000)
+            return {
+                "provider": name,
+                "response": "",
+                "latency_ms": latency,
+                "tokens_used": 0,
+                "model": "",
+                "error": str(exc)[:300],
+            }
+
+    results = await asyncio.gather(*(_run(name) for name in targets))
+    return {"results": list(results), "message": message}

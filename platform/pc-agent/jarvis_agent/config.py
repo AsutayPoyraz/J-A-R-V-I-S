@@ -6,16 +6,16 @@ her zaman .env dosyalarından önceliklidir):
 
 1. platform/pc-agent/.env
 2. platform/.env
-3. <depo kökü>/.env          ← mevcut JARVIS v10 anahtarları otomatik devralınır
-
-Anahtar değerleri koda asla gömülmez (bkz. .env.example).
+3. <depo kökü>/.env          ← JARVIS v10.x (eski masaüstü) anahtarları
+                                v11'de de aynı biçimde devralınır
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"      # package sürümü (semver)
+JARVIS_VERSION = "v11"     # ürün sürümü — UI/docs tek kaynak (Özellik 15)
 
 AGENT_ROOT = Path(__file__).resolve().parent.parent      # platform/pc-agent
 PLATFORM_ROOT = AGENT_ROOT.parent                       # platform/
@@ -42,6 +42,8 @@ ALLOWED_PERSONA_STYLES = ("classic", "friendly", "concise", "funny")
 ALLOWED_WIDGETS = (
     "social", "agent", "files", "weather", "system", "reminders",
     "smart_home", "camera", "uptime", "privacy", "wellbeing",
+    # JARVIS v11 (mega prompt) widget'ları
+    "tasks", "habits", "knowledge", "macros",
 )
 
 # Kullanıcı ayarları için izinli değerler (kullanıcıya özel ayarlar DB'de tutulur).
@@ -146,12 +148,22 @@ LLM_MODEL = env("JARVIS_LLM_MODEL")                  # boş → sağlayıcı var
 
 GROQ_API_KEY = env("JARVIS_GROQ_API_KEY") or env("GROQ_API_KEY")
 GROQ_MODEL = env("JARVIS_GROQ_MODEL", "openai/gpt-oss-20b")
+# Özellik 18: Groq üzerinden Llama 3.3 70B seçeneği.
+GROQ_LLAMA_MODEL = "llama-3.3-70b-versatile"
 OPENAI_API_KEY = env("JARVIS_OPENAI_API_KEY") or env("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = env("JARVIS_ANTHROPIC_API_KEY") or env("ANTHROPIC_API_KEY")
 OLLAMA_URL = env("JARVIS_OLLAMA_URL")                # boş → devre dışı
+# Özellik 18: yeni sağlayıcılar.
+GEMINI_API_KEY = env("JARVIS_GEMINI_API_KEY") or env("GEMINI_API_KEY")
+GEMINI_MODEL = env("JARVIS_GEMINI_MODEL", "gemini-2.0-flash")
+DEEPSEEK_API_KEY = env("JARVIS_DEEPSEEK_API_KEY") or env("DEEPSEEK_API_KEY")
+DEEPSEEK_MODEL = env("JARVIS_DEEPSEEK_MODEL", "deepseek-reasoner")
 
 DEFAULT_MODELS = {
+    "gemini": GEMINI_MODEL,
+    "deepseek": DEEPSEEK_MODEL,
     "groq": GROQ_MODEL,
+    "llama": GROQ_LLAMA_MODEL,   # Groq üzerinden Llama 3.3 70B
     "openai": "gpt-4o-mini",
     "anthropic": "claude-sonnet-4-20250514",
     "ollama": "llama3.1",
@@ -160,7 +172,11 @@ DEFAULT_MODELS = {
 
 
 def detect_provider() -> str:
-    """Hangi sağlayıcının anahtarı varsa onu seçer (öncelik sırasıyla)."""
+    """Hangi sağlayıcının anahtarı varsa onu seçer (Özellik 18 önceliği)."""
+    if GEMINI_API_KEY:
+        return "gemini"
+    if DEEPSEEK_API_KEY:
+        return "deepseek"
     if GROQ_API_KEY:
         return "groq"
     if OPENAI_API_KEY:

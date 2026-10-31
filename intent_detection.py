@@ -54,7 +54,7 @@ _REQUEST_RE = re.compile(
     r"\w*\s+misiniz?\b"
 )
 
-# Mevcut atlas_intent anahtar kelimeleriyle uyumlu (jarvis_v10._send ile aynı)
+# Mevcut atlas_intent anahtar kelimeleriyle uyumlu (jarvis_v11._send ile aynı)
 COMPUTER_OP_KEYWORDS = (
     "acik pencer", "aktif pencere", "ekran", "tikla", "klavyeye",
     "uygulama ac", "program ac", "ayarleri ac", "process", "islemleri analiz",

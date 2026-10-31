@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from config import APP_VERSION
 from services.update_check import check_for_update, is_update_check_configured
 
 
@@ -72,6 +73,12 @@ class UpdateCheckTests(unittest.TestCase):
             }
             return response
 
+        # Etiketler gerçek APP_VERSION'dan türetilir; sürüm yükseltildiğinde
+        # testin elle güncellenmesi gerekmez.
+        major, minor, patch = (int(part) for part in APP_VERSION.split(".")[:3])
+        current_tag = f"v{major}.{minor}.{patch}"
+        newer_tag = f"v{major}.{minor}.{patch + 1}"
+
         with mock.patch.dict(
             "os.environ",
             {"JARVIS_UPDATE_URL": "https://example.com/api/releases/latest"},
@@ -79,10 +86,10 @@ class UpdateCheckTests(unittest.TestCase):
         ), mock.patch(
             "services.update_check.HTTP_SESSION.get"
         ) as request:
-            request.return_value = _response("v10.0.1")
+            request.return_value = _response(newer_tag)
             self.assertTrue(check_for_update().update_available)
 
-            request.return_value = _response("v10.0.0")
+            request.return_value = _response(current_tag)
             self.assertFalse(check_for_update().update_available)
 
 

@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-import jarvis_v10
+import jarvis_v11
 
 
 def _content_chunk(content):
@@ -13,13 +13,13 @@ def _content_chunk(content):
 
 class AIFailoverTests(unittest.TestCase):
     def setUp(self):
-        self.engine = object.__new__(jarvis_v10.AIEngine)
+        self.engine = object.__new__(jarvis_v11.AIEngine)
         self.engine.client = mock.Mock()
         self.engine.gemini_client = mock.Mock()
 
     def _stream(self, prompt):
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False):
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False):
             return list(self.engine.stream([], prompt))
 
     def test_gemini_is_used_when_groq_fails_before_producing_output(self):
@@ -35,7 +35,7 @@ class AIFailoverTests(unittest.TestCase):
         self.engine.gemini_client.chat.completions.create.assert_called_once()
         self.assertEqual(
             self.engine.gemini_client.chat.completions.create.call_args.kwargs["model"],
-            jarvis_v10.GEMINI_MODEL,
+            jarvis_v11.GEMINI_MODEL,
         )
 
     def test_gemini_is_not_used_after_groq_has_streamed_partial_answer(self):
@@ -71,8 +71,8 @@ class AIFailoverTests(unittest.TestCase):
         self.engine.gemini_client.chat.completions.create.return_value = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="Gemini yanıtı"))]
         )
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False):
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False):
             reply = self.engine.chat([], "Merhaba")
 
         self.assertEqual(reply, "Gemini yanıtı")
@@ -95,8 +95,8 @@ class AIFailoverTests(unittest.TestCase):
         self.engine.gemini_client.chat.completions.create.return_value = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="Bilgi yanıtı"))]
         )
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False):
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False):
             reply = self.engine.chat([], "Fotosentez nedir?")
 
         self.assertEqual(reply, "Bilgi yanıtı")
@@ -109,8 +109,8 @@ class AIFailoverTests(unittest.TestCase):
         )
         local_context = "Yerel alıntı: kullanıcı bilgisayarını güncelledi."
         old_history = [{"role": "user", "content": "private old conversation"}]
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False):
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False):
             list(self.engine.stream(
                 old_history,
                 "Devam et: bilgisayar",
@@ -125,10 +125,10 @@ class AIFailoverTests(unittest.TestCase):
         self.assertNotIn("private old conversation", request_text)
 
     def test_web_search_uses_grounding_and_does_not_call_groq(self):
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False), \
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False), \
              mock.patch.object(
-                 jarvis_v10,
+                 jarvis_v11,
                  "gemini_grounded_search",
                  return_value="Güncel yanıt\n\nKaynaklar:\n• Örnek: https://example.com",
              ) as search:
@@ -140,10 +140,10 @@ class AIFailoverTests(unittest.TestCase):
         self.engine.client.chat.completions.create.assert_not_called()
 
     def test_failed_web_search_is_reported_without_ungrounded_fallback(self):
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False), \
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False), \
              mock.patch.object(
-                 jarvis_v10,
+                 jarvis_v11,
                  "gemini_grounded_search",
                  side_effect=RuntimeError("Gemini key missing"),
              ):
@@ -167,7 +167,7 @@ class AIFailoverTests(unittest.TestCase):
         )
         for raw_error, expected in cases:
             with self.subTest(raw_error=raw_error):
-                self.assertIn(expected, jarvis_v10._friendly_ai_error(RuntimeError(raw_error)))
+                self.assertIn(expected, jarvis_v11._friendly_ai_error(RuntimeError(raw_error)))
 
     def test_cancelled_provider_stream_does_not_fall_back_to_gemini(self):
         class _ClosableStream:

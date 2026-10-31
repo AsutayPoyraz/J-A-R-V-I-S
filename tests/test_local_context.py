@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-import jarvis_v10
+import jarvis_v11
 from services.local_context import (
     MAX_CONTEXT_CHARS,
     MAX_CONTEXT_MESSAGES,
@@ -54,14 +54,14 @@ class LocalContextTests(unittest.TestCase):
             "ts": "2026-10-01T10:00:00",
         }]
         with mock.patch.object(
-            jarvis_v10, "db_search_messages", return_value=matches
+            jarvis_v11, "db_search_messages", return_value=matches
         ) as search, mock.patch.object(
-            jarvis_v10.QMessageBox,
+            jarvis_v11.QMessageBox,
             "question",
-            return_value=jarvis_v10.QMessageBox.Yes,
+            return_value=jarvis_v11.QMessageBox.Yes,
         ) as confirmation:
             query, context, authorized = (
-                jarvis_v10.JarvisWindow._authorize_local_context(
+                jarvis_v11.JarvisWindow._authorize_local_context(
                     window,
                     "geçmiş bağlamıyla: bilgisayar önerisini özetle",
                 )
@@ -82,7 +82,7 @@ class LocalContextTests(unittest.TestCase):
             mode_box=SimpleNamespace(currentData=lambda: "normal")
         )
         with mock.patch.object(
-            jarvis_v10,
+            jarvis_v11,
             "db_search_messages",
             return_value=[{
                 "title": "Eski sohbet",
@@ -91,12 +91,12 @@ class LocalContextTests(unittest.TestCase):
                 "ts": "2026-10-01T10:00:00",
             }],
         ), mock.patch.object(
-            jarvis_v10.QMessageBox,
+            jarvis_v11.QMessageBox,
             "question",
-            return_value=jarvis_v10.QMessageBox.No,
+            return_value=jarvis_v11.QMessageBox.No,
         ):
             query, context, authorized = (
-                jarvis_v10.JarvisWindow._authorize_local_context(
+                jarvis_v11.JarvisWindow._authorize_local_context(
                     window,
                     "geçmiş bağlamıyla: eski fikri açıkla",
                 )

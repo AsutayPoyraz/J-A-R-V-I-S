@@ -66,6 +66,14 @@ python -m venv .venv
 Anahtarlar: depo kökündeki `.env` otomatik okunur (JARVIS_GROQ_API_KEY
 vb.). Agent'a özel değerler için `platform/pc-agent/.env.example` → `.env`.
 
+> **Kamera (OpenCV) notu (v11):** `opencv-python` requirements içinde yer
+> alır; kurulu değilse `GET /api/camera/status` → `opencv_installed: false`
+> döner ve arayüz "OpenCV kuruluyor..." modalıyla `POST /api/camera/install`
+> çağırır (pip ile otomatik kurar; `JARVIS_CAMERA_AUTO_INSTALL=0` ile
+> kapatılabilir). Manuel kurulum: `pip install opencv-python`.
+> Ek not: `sounddevice` Windows'ta PortAudio DLL'i gerektirir — pip wheel'i
+> birlikte getirir; sorun olursa platform README sounddevice bölümüne bakın.
+
 ### 2) Web UI
 
 ```powershell

@@ -311,7 +311,7 @@ class TroubleshootAgent:
         forum_result = ""
         if error_code:
             try:
-                from jarvis_v10 import search_error_forums
+                from jarvis_v11 import search_error_forums
                 forum_result = search_error_forums(error_code.group())
             except ImportError:
                 pass

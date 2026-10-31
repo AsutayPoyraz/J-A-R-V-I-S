@@ -14,6 +14,8 @@ Bilerek yapılmayan: eski cihaz/istemci verisinin kullanıcıya taşınması
 """
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -25,17 +27,22 @@ router = APIRouter()
 
 
 class RegisterBody(BaseModel):
+    # Özellik 5A: kullanıcı adı akışı — username doluysa güvenlik sorusu zorunlu değil.
+    username: Optional[str] = Field(default=None, max_length=32)
     first_name: str = Field(min_length=2, max_length=40)
     last_name: str = Field(min_length=2, max_length=40)
-    birth_date: str = Field(min_length=10, max_length=10)
     password: str = Field(min_length=8, max_length=128)
-    security_question: str = Field(min_length=4, max_length=200)
-    security_answer: str = Field(min_length=2, max_length=120)
+    password_repeat: Optional[str] = Field(default=None, max_length=128)
+    birth_date: Optional[str] = Field(default=None, max_length=10)
+    security_question: Optional[str] = Field(default=None, max_length=200)
+    security_answer: Optional[str] = Field(default=None, max_length=120)
 
 
 class LoginBody(BaseModel):
-    first_name: str = Field(min_length=1, max_length=40)
-    last_name: str = Field(min_length=1, max_length=40)
+    # Özellik 5A: username doluysa kullanıcı adı akışı; yoksa ad/soyad akışı.
+    username: Optional[str] = Field(default=None, max_length=32)
+    first_name: Optional[str] = Field(default=None, max_length=40)
+    last_name: Optional[str] = Field(default=None, max_length=40)
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -82,6 +89,23 @@ def _tokens_for(user: dict) -> dict:
 @router.post("/api/auth/register")
 def register(payload: RegisterBody) -> JSONResponse:
     _available()
+    # ── Özellik 5A: kullanıcı adı akışı ──
+    if payload.username:
+        if payload.password_repeat is not None and payload.password != payload.password_repeat:
+            return JSONResponse({"detail": "Şifreler eşleşmiyor.", "field": "password_repeat"}, 422)
+        try:
+            user = auth.register_with_username(
+                payload.username, payload.first_name, payload.last_name, payload.password
+            )
+        except auth.AuthError as exc:
+            return _error(exc)
+        database.audit("auth.register", actor=f"user:{user['id']}", detail=user["id"])
+        return JSONResponse(_tokens_for(user), status_code=201)
+    # ── Klasik ad/soyad + güvenlik sorusu akışı (geriye dönük uyumlu) ──
+    if not payload.birth_date or not payload.security_question or not payload.security_answer:
+        return JSONResponse(
+            {"detail": "Klasik kayıt için doğum tarihi ve güvenlik sorusu gerekli."}, 422
+        )
     try:
         user = auth.create_account(
             payload.first_name,
@@ -100,6 +124,23 @@ def register(payload: RegisterBody) -> JSONResponse:
 @router.post("/api/auth/login")
 def login(payload: LoginBody, request: Request) -> JSONResponse:
     _available()
+    # ── Özellik 5A: kullanıcı adı akışı ──
+    if payload.username:
+        try:
+            user = auth.authenticate_username(
+                payload.username, payload.password, _client_ip(request)
+            )
+        except auth.AuthError as exc:
+            database.audit(
+                "auth.login_failed",
+                actor=f"username:{payload.username.strip().lower()}",
+            )
+            return _error(exc)
+        database.audit("auth.login", actor=f"user:{user['id']}", detail=user["id"])
+        return JSONResponse(_tokens_for(user))
+    # ── Klasik ad/soyad akışı ──
+    if not payload.first_name or not payload.last_name:
+        return JSONResponse({"detail": "Kullanıcı adı veya ad/soyad gerekli."}, 422)
     try:
         user = auth.authenticate(
             payload.first_name, payload.last_name, payload.password, _client_ip(request)

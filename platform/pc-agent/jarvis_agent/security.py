@@ -286,11 +286,44 @@ def websocket_owner(websocket: Any) -> tuple[str, str]:
 # ── Yardımcılar ──────────────────────────────────────────────────────────────
 
 def lan_ip() -> Optional[str]:
-    """Varsayılan rotanın yerel IP'si (paket göndermez, sadece yönlendirir)."""
+    """Varsayılan rotanın yerel IP'si (paket göndermez, sadece yönlendirir).
+
+    Özellik 4: UDP yönlendirme hilesi başarısızsa psutil.net_if_addrs() ile
+    tüm arayüzler taranır; loopback (127.x) ve link-local (169.254.x) hariç
+    ilk geçerli IPv4 seçilir.
+    """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.settimeout(0.5)
             s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith(("127.", "169.254.")):
+                return ip
     except OSError:
+        pass
+    return _scan_interfaces_ipv4()
+
+
+def _scan_interfaces_ipv4() -> Optional[str]:
+    """Tüm ağ arayüzlerini tarar; ilk gerçek LAN IPv4'ünü döndürür."""
+    try:
+        import psutil
+
+        addrs_map = psutil.net_if_addrs()
+    except Exception:  # noqa: BLE001 — psutil yoksa None
         return None
+    import socket as _socket
+
+    for _name, addrs in addrs_map.items():
+        for addr in addrs:
+            try:
+                family = int(getattr(addr, "family", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if family != _socket.AF_INET:
+                continue
+            ip = str(getattr(addr, "address", "") or "")
+            if not ip or ip.startswith(("127.", "169.254.", "0.")):
+                continue
+            return ip
+    return None

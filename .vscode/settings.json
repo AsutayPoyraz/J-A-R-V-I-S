@@ -38,5 +38,29 @@
     },
     "typescript.tsserver.maxTsServerMemory": 1024,
     "python.terminal.useEnvFile": true,
-    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+    "CodeGPT.apiKey": "CodeGPT Plus Beta",
+    "workbench.colorCustomizations": {
+        "editor.lineHighlightBackground": "#37373d40",
+        "editor.lineHighlightBorder": "#5a5a6a",
+        "activityBar.selectedBorder": "#5a5a6a",
+        "titleBar.activeBackground": "#252526",
+        "statusBar.background": "#1e1e1e",
+        "statusBar.foreground": "#8c8c8c",
+        "statusBar.border": "#3a3a42",
+        "statusBarItem.activeBackground": "#3a3a42",
+        "list.focusBackground": "#37373d",
+        "list.activeSelectionBackground": "#37373d40",
+        "list.activeSelectionForeground": "#d4d4d4",
+        "gitDecoration.addedResourceForeground": "#268bd2",
+        "gitDecoration.modifiedResourceForeground": "#6a6a7a",
+        "gitDecoration.stageModifiedResourceForeground": "#6a6a7a",
+        "gitDecoration.deletedResourceForeground": "#cc2936",
+        "gitDecoration.renamedResourceForeground": "#b58900",
+        "gitDecoration.ignoredResourceForeground": "#6a6a7a80",
+        "gitDecoration.untrackedResourceForeground": "#8abeb7",
+        "tab.activeModifiedBorder": "#6a6a7a",
+        "tab.inactiveModifiedBorder": "#5a5a6a",
+        "tab.unfocusedActiveModifiedBorder": "#5a5a6a",
+        "tab.unfocusedInactiveModifiedBorder": "#4a4a54"
+    }
 }

@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = $PSScriptRoot
 $pythonPath = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$appPath = Join-Path $projectRoot "jarvis_v10.py"
+$appPath = Join-Path $projectRoot "jarvis_v11.py"
 
 if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
     Write-Error "Project Python was not found at $pythonPath. Create .venv and install requirements.txt first."

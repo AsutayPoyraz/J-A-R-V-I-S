@@ -1,4 +1,37 @@
 # Changelog
+# Changelog
+
+## [11.0.0] — 2026-10-28
+
+JARVIS v11 "Apex+" — mega prompt'taki 19 özelliğin platform (pc-agent + web) tarafına uygulanması.
+
+### Eklenen
+
+- **Özellik 1 — Yüksek IQ Modu:** `llm/system_prompt.py` merkezî sistem promptu (IQ 200-250 ansiklopedik doğruluk kimliği), `web_search` aracı (DuckDuckGo varsayılan / SerpAPI, `JARVIS_SEARCH_PROVIDER`), `fact_check_needed` olgu sınıflandırıcısı ve sohbette otomatik web doğrulaması ("Web'den doğruladım:" notu).
+- **Özellik 2 — İstemci Cihaz İstatistikleri:** `useClientStats.ts` hook'u (3 sn'de bir UA/deviceMemory/hardwareConcurrency/heap/batarya/ağ/ekran) + SystemStatsCard "Sunucu | Bu Cihaz" sekmeleri ve cihaz ikonu.
+- **Özellik 3 — Kamera Güvenli Başlatma:** OpenCV yokluğunda `/api/camera/status` (opencv_installed/camera_available/disabled_by_env/error) + `/api/camera/install` (WS ilerlemeli pip kurulumu, `JARVIS_CAMERA_AUTO_INSTALL`) + frontend kurulum modalı.
+- **Özellik 4 — Eşleştirme Sağlamlaştırma:** Çok arayüzlü LAN IP taraması (loopback/link-local hariç), `/api/pair/debug` tanı ucu, LAN origin'lere CORS.
+- **Özellik 5 — Kullanıcı + API Anahtarları:** Kullanıcı adı bazlı kayıt/giriş (`/api/auth/register`, `/api/auth/login` geriye dönük uyumlu), `user_api_keys` tablosu (Fernet AES-128-CBC+HMAC — `JARVIS_MASTER_KEY`), `/api/user/api-keys` CRUD + gerçek API testi, ApiKeysSettings arayüzü, DB > .env > mock anahtar önceliği.
+- **Özellik 6 — Görev Yöneticisi:** projects/tasks/subtasks tabloları, `/api/tasks/*` CRUD, `create_task/list_tasks/complete_task` LLM araçları, Kanban TaskManagerCard.
+- **Özellik 7 — Ekran Özeti:** `getDisplayMedia` onaylı ekran bağlamı, `/api/screen/analyze` vision analizi, WS öneri push'u, `JARVIS_SCREEN_ANALYSIS_DISABLED`.
+- **Özellik 8 — Kişisel Bilgi Tabanı (RAG):** `knowledge/` modülü (chunk + embedding + SQLite cosine retriever), `/api/knowledge/*` uçları, sohbete otomatik bağlam, KnowledgeCard.
+- **Özellik 9 — Sesli Komut Makroları:** macros tablosu, `/api/macros/*`, tetikleyici ifade eşleştirmesi (textmatch), MacrosCard builder.
+- **Özellik 10 — Alışkanlık Takipçisi:** habits/habit_logs/productivity_sessions tabloları, streak + ısı haritası, AI içgörüler, `/api/habits/*`.
+- **Özellik 11 — Günlük Özet:** `core/daily_summary.py` (21:00 zamanlayıcı), WhatsApp/sohbet dağıtımı, `/api/summary/generate|history`, ayar toggle'ı.
+- **Özellik 12 — LLM Karşılaştırma:** `/api/chat/compare` (asyncio.gather, yalnız yapılandırılmış sağlayıcılar), CompareMode yan yana kartlar, "Bu yanıtı seç".
+- **Özellik 13 — trim() Düzeltmesi:** Pydantic null-safe trim validasyonları + `sanitizeSettings` util + null başlangıçlı form alanları.
+- **Özellik 14 — Mikrofon Onarımı:** `GET /api/voice/devices` (sounddevice cihaz listesi), `JARVIS_AUDIO_INPUT_DEVICE` override, tarayıcı izin akışı + hata türü bazlı mesajlar.
+- **Özellik 15 — v11 Sürümleme:** Tüm sürüm görünümleri `config.JARVIS_VERSION` tek kaynağına bağlandı.
+- **Özellik 16 — Performans:** React.lazy + Suspense kod bölme, WS exponential backoff (1→30 sn) + "Yeniden bağlanıyor" banner'ı, GZipMiddleware, sohbet sanal listesi, mobil alt tab navigasyonu.
+- **Özellik 17 — Web ATLAS:** `/api/atlas/*` görev kuyruğu (asyncio.Queue, `JARVIS_ATLAS_MAX_CONCURRENT`) + WS adım akışı, AtlasPanel drawer.
+- **Özellik 18 — LLM Sıralaması + Fallback:** gemini_provider + deepseek_provider, `llm/router.py` (gemini→deepseek→groq→llama), sağlayıcı seçici dropdown, "Yanıtlayan: X" etiketi, ashiş;d53c; temizleme.
+- **Özellik 19 — Konum + Hava:** `/api/location/detect|reverse-geocode|set` (ipapi.co → ip-api.com fallback), `useLocation.ts`, timezone uyumu.
+
+### Altyapı
+
+- Yeni bağımlılıklar (opsiyonel, zarif degrade): `cryptography` (API anahtarı şifreleme), `duckduckgo-search` (web arama; httpx fallback'li).
+- Yeni test dosyaları: fact-check, router fallback, kullanıcı API anahtarları, görevler, makrolar, alışkanlıklar, günlük özet, konum, bilgi tabanı, karşılaştırma, eşleştirme debug, kamera durumu.
+
 
 ## [10.0.0] — 2026-10-08
 

@@ -1,6 +1,7 @@
 """Kamera uçları."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
@@ -47,6 +48,41 @@ def camera_close(request: Request) -> dict:
 @router.get("/api/camera/status")
 def camera_status(request: Request) -> dict:
     return _service(request).status()
+
+
+@router.post("/api/camera/install")
+async def camera_install(request: Request) -> dict:
+    """Özellik 3.4: opencv-python kurulumu (WS ilerlemesi dahil)."""
+    from ..camera import service as cam
+
+    if cam.opencv_installed():
+        return {"ok": True, "detail": "opencv-python zaten kurulu.", "progress": cam.install_progress()}
+    # Otomatik kurulum kapatılabilir (mega prompt Genel Notlar/3).
+    from .. import config
+
+    if config.env("JARVIS_CAMERA_AUTO_INSTALL", "1") == "0":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Otomatik kurulum kapalı (JARVIS_CAMERA_AUTO_INSTALL=0). "
+                "Manuel komut: pip install opencv-python"
+            ),
+        )
+    result = await asyncio.to_thread(cam.install_opencv)
+    # İlerlemeyi WS ile bildir (bağlı istemci varsa).
+    try:
+        from . import ws as ws_module
+
+        await ws_module.manager.broadcast_all(
+            {"type": "camera.install", **result}
+        )
+    except Exception:  # noqa: BLE001 — WS yoksa kurulum sonucu yeterli
+        pass
+    return {**result, "progress": cam.install_progress()}
+
+
+async def _noop() -> None:  # pragma: no cover
+    return None
 
 
 @router.post("/api/camera/capture")

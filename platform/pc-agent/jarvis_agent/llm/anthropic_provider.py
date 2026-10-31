@@ -135,11 +135,16 @@ class AnthropicProvider(ChatProvider):
                             arguments=block.get("input") or {},
                         )
                     )
+            usage = data.get("usage") or {}
+            tokens = int(usage.get("input_tokens") or 0) + int(
+                usage.get("output_tokens") or 0
+            )
             return ChatResult(
                 content="\n".join(content_parts),
                 tool_calls=tool_calls,
                 finish_reason=data.get("stop_reason") or "end_turn",
                 model=data.get("model", self.model),
+                tokens_used=tokens,
             )
         except (KeyError, ValueError, TypeError) as exc:
             raise ProviderError(f"Anthropic yanıtı ayrıştırılamadı: {exc}") from exc

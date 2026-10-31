@@ -52,7 +52,7 @@ def benchmark_cold_import(repeats: int = 3) -> dict[str, float]:
     code = (
         "import json, time; "
         "start=time.perf_counter(); "
-        "import jarvis_v10; "
+        "import jarvis_v11; "
         "elapsed=(time.perf_counter()-start)*1000; "
         "rss=None; "
         "import psutil; "

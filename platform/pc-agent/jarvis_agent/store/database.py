@@ -7,6 +7,7 @@ içinde bildirilir; şema değişiklikleri idempotenttir.
 from __future__ import annotations
 
 import datetime
+import re
 import sqlite3
 import threading
 from contextlib import closing
@@ -119,6 +120,125 @@ CREATE TABLE IF NOT EXISTS todos (
     done INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+-- ══ JARVIS v11 (mega prompt) tabloları ══════════════════════════════════════
+
+-- Özellik 5B: kullanıcı bazlı API anahtarları (Fernet şifreli değerler).
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    key_name TEXT NOT NULL,
+    key_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, key_name)
+);
+
+-- Özellik 6: görev & proje yöneticisi.
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#22d3ee',
+    created_at TEXT NOT NULL,
+    UNIQUE (owner_id, name)
+);
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    priority TEXT NOT NULL DEFAULT 'medium'
+        CHECK (priority IN ('low','medium','high','urgent')),
+    status TEXT NOT NULL DEFAULT 'todo'
+        CHECK (status IN ('todo','in_progress','done')),
+    due_date TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks (owner_id, status, id);
+CREATE TABLE IF NOT EXISTS subtasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0
+);
+
+-- Özellik 9: sesli/metin komut makroları (trigger'lı; section_f 'macros'
+-- kısayol tablosundan AYRIDIR — ad çakışması bilinçli olarak önlendi).
+CREATE TABLE IF NOT EXISTS command_macros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    trigger_phrase TEXT NOT NULL,
+    steps TEXT NOT NULL DEFAULT '[]',  -- JSON: [{type, params}]
+    created_at TEXT NOT NULL,
+    UNIQUE (owner_id, trigger_phrase)
+);
+
+-- Özellik 10: alışkanlık & üretkenlik takibi.
+CREATE TABLE IF NOT EXISTS habits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    frequency TEXT NOT NULL DEFAULT 'daily',
+    color TEXT NOT NULL DEFAULT '#a78bfa',
+    icon TEXT NOT NULL DEFAULT '✅',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    owner_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 1,
+    note TEXT NOT NULL DEFAULT '',
+    UNIQUE (habit_id, date)
+);
+CREATE TABLE IF NOT EXISTS productivity_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    focus_minutes INTEGER NOT NULL DEFAULT 0,
+    mood INTEGER NOT NULL DEFAULT 3 CHECK (mood BETWEEN 1 AND 5),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+-- Özellik 11: günlük özet geçmişi.
+CREATE TABLE IF NOT EXISTS daily_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    content TEXT NOT NULL,
+    channels TEXT NOT NULL DEFAULT 'chat',
+    created_at TEXT NOT NULL,
+    UNIQUE (owner_id, date)
+);
+
+-- Özellik 8: kişisel bilgi tabanı (RAG).
+CREATE TABLE IF NOT EXISTS knowledge_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL DEFAULT 'text/plain',
+    chunks_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'ready'
+        CHECK (status IN ('processing','ready','error')),
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_docs ON knowledge_documents (owner_id, id);
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
+    owner_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    embedding BLOB,              -- float32 paketlenmiş vektör
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunks ON knowledge_chunks (owner_id, document_id);
 """
 
 
@@ -153,6 +273,7 @@ def init_db() -> None:
         _migrate_user_settings_columns(conn)
         _ensure_section_f_tables(conn)
         _ensure_section_g_tables(conn)
+        _migrate_users_username(conn)
         for key, value in _default_settings().items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
@@ -160,6 +281,34 @@ def init_db() -> None:
             )
         # Eski global ayarları (renk/şehir) bir kez 'local' sahibine taşı.
         _migrate_legacy_settings(conn)
+
+
+def _migrate_users_username(conn: sqlite3.Connection) -> None:
+    """Özellik 5A: users tablosuna username sütunu + benzersiz indeks (idempotent)."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "username" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        # Eski kayıtlar için varsayılan kullanıcı adı türet (isim_soyisim).
+        rows = conn.execute(
+            "SELECT id, first_name_lower, last_name_lower FROM users "
+            "WHERE username IS NULL"
+        ).fetchall()
+        for row in rows:
+            base = f"{row['first_name_lower']}_{row['last_name_lower']}"
+            base = re.sub(r"[^a-z0-9_]", "", base)[:32] or f"user_{row['id'][:6]}"
+            candidate, suffix = base, 1
+            while conn.execute(
+                "SELECT 1 FROM users WHERE username = ?", (candidate,)
+            ).fetchone():
+                suffix += 1
+                candidate = f"{base}{suffix}"
+            conn.execute(
+                "UPDATE users SET username = ? WHERE id = ?", (candidate, row["id"])
+            )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username "
+        "ON users (username) WHERE username IS NOT NULL"
+    )
 
 
 def _migrate_user_settings_columns(conn: sqlite3.Connection) -> None:
@@ -898,4 +1047,64 @@ def update_user_password(user_id: str, password_hash: str) -> bool:
             "UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id)
         )
     return cur.rowcount > 0
+
+
+# ── Kullanıcı adı bazlı hesaplar (Özellik 5A) ────────────────────────────────
+
+def create_user_username(
+    username: str, first_name: str, last_name: str, password_hash: str
+) -> dict[str, Any]:
+    """Kullanıcı adı + ad/soyad + şifre ile hesap oluşturur.
+
+    Güvenlik sorusu olmayan (kullanıcı adı akışı) hesaplar için recovery alanları
+    nötr değerlerle doldurulur (şema NOT NULL zorunluluğu).
+    """
+    import uuid
+
+    user_id = uuid.uuid4().hex[:16]
+    try:
+        with _write_lock, closing(connect()) as conn, conn:
+            conn.execute(
+                "INSERT INTO users (id, username, first_name, last_name, "
+                "first_name_lower, last_name_lower, birth_date, password_hash, "
+                "security_question, security_answer_hash, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    user_id,
+                    username.lower(),
+                    first_name,
+                    last_name,
+                    first_name.lower(),
+                    last_name.lower(),
+                    "2000-01-01",
+                    password_hash,
+                    "Bu hesap kullanıcı adı ile oluşturuldu.",
+                    "disabled:username-flow",
+                    _now(),
+                ),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("Bu kullanıcı adı zaten alınmış.") from exc
+    return get_user_by_id(user_id) or {}
+
+
+def get_user_by_username(username: str) -> Optional[dict[str, Any]]:
+    with closing(connect()) as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?",
+            ((username or "").strip().lower(),),
+        ).fetchone()
+    return _user_row_to_dict(row) if row else None
+
+
+def touch_user_login(user_id: str) -> None:
+    """last_login alanını şimdi olarak günceller (Özellik 5A)."""
+    columns = {r["name"] for r in connect().execute("PRAGMA table_info(users)")}
+    if "last_login" not in columns:
+        with _write_lock, closing(connect()) as conn, conn:
+            conn.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
+    with _write_lock, closing(connect()) as conn, conn:
+        conn.execute(
+            "UPDATE users SET last_login = ? WHERE id = ?", (_now(), user_id)
+        )
 

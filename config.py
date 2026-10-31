@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 import json
 import os
 import sys
 import threading
 from pathlib import Path
+
+logger = __import__('logging').getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parent
 APP_DATA_DIR = Path.home() / ".jarvis"
@@ -23,9 +23,10 @@ except OSError:
 
 # Tek sürüm kaynağı: JARVIS_VERSION ortam değişkeni tanımsızsa güncelleme
 # denetimi (services.update_check) bu değeri 'mevcut sürüm' olarak kullanır.
-APP_VERSION = "10.0.0"
-# UI metinlerinde kısa biçim (ör. "v10.0 Apex"): "10.0.0" → "10.0"
-APP_DISPLAY_VERSION = ".".join(APP_VERSION.split(".")[:2])
+APP_VERSION = "11.0.0"
+# UI metinlerinde kısa biçim (ör. "v11 Apex"): ürün markası "v11" — README ve
+# pc-agent'ın JARVIS_VERSION ("v11") değeriyle hizalı; semver APP_VERSION'da.
+APP_DISPLAY_VERSION = APP_VERSION.split(".")[0]
 
 
 def _load_dotenv_file() -> None:
@@ -71,24 +72,39 @@ def _env(name: str, default: str = "") -> str:
 
 
 def ensure_private_file(path: str) -> None:
+    """Dosyanın ve onun klasörünün güvenli izinlerle (600/700) ayarlanması.
+    
+    Windows'ta çalışmama izin hataları nedeniyle bu işlem isteğe bağlıdır.
+    """
+    p = Path(path)
     try:
-        p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(p.parent, 0o700)
+        try:
+            os.chmod(p.parent, 0o700)
+        except (PermissionError, OSError) as e:
+            logger.debug(f"[Config] Klasör izinleri ayarlanamadı: {e}")
         if p.exists():
-            os.chmod(p, 0o600)
-    except OSError:
-        pass
+            try:
+                os.chmod(p, 0o600)
+            except (PermissionError, OSError) as e:
+                logger.debug(f"[Config] Dosya izinleri ayarlanamadı: {e}")
+    except OSError as e:
+        logger.warning(f"[Config] Dosya güvenliği ayarı başarısız: {e}")
 
 
 def safe_read_json(path: str, default=None):
+    """JSON dosyasını güvenli bir şekilde oku. Hata durumunda default döner."""
     resolved = Path(path)
     if not resolved.exists():
         return default
     try:
         with open(resolved, "r", encoding="utf-8") as handle:
             return json.load(handle)
-    except (OSError, ValueError):
+    except json.JSONDecodeError as e:
+        logger.debug(f"[Config] JSON parse hatası: {e}")
+        return default
+    except (OSError, ValueError) as e:
+        logger.debug(f"[Config] JSON okuma hatası: {e}")
         return default
 
 

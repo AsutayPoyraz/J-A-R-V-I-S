@@ -192,6 +192,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ refresh_token: authToken.refresh() }),
     }),
+  /** Özellik 5A: kullanıcı adı bazlı giriş/kayıt (geriye dönük uyumlu ekleme). */
+  authLoginUsername: (username: string, password: string) =>
+    request<TokenPair>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  authRegisterUsername: (body: {
+    username: string;
+    first_name: string;
+    last_name: string;
+    password: string;
+    password_repeat: string;
+  }) =>
+    request<TokenPair>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   health: () => request<import("../types").HealthInfo>("/api/health"),
   integrations: () =>
     request<{ integrations: Record<string, { configured: boolean; connected?: boolean; reachable?: boolean; detail?: string }> }>(
@@ -238,11 +255,35 @@ export const api = {
     request<{ messages: import("../types").ChatMessage[]; count: number }>(
       "/api/conversation"
     ),
-  sendChat: (message: string) =>
-    request<{ reply: string; error: boolean; provider: string; model: string }>(
+  sendChat: (message: string, provider = "") =>
+    request<{
+      reply: string;
+      error: boolean;
+      provider: string;
+      model: string;
+      provider_used?: string;
+      fallback_occurred?: boolean;
+      used_tools?: string[];
+    }>(
       "/api/chat",
-      { method: "POST", body: JSON.stringify({ message }) }
+      { method: "POST", body: JSON.stringify({ message, provider }) }
     ),
+  /** Özellik 12: çoklu LLM karşılaştırma (yalnızca üyeler). */
+  chatCompare: (message: string, providers: string[]) =>
+    request<{
+      results: {
+        provider: string;
+        response: string;
+        latency_ms: number;
+        tokens_used: number;
+        model: string;
+        error: string;
+      }[];
+      message: string;
+    }>("/api/chat/compare", {
+      method: "POST",
+      body: JSON.stringify({ message, providers }),
+    }),
   clearConversation: () => request<{ cleared: number }>("/api/conversation", { method: "DELETE" }),
   cameraOpen: () => request<import("../types").CameraStatus>("/api/camera/open", { method: "POST" }),
   cameraClose: () => request<import("../types").CameraStatus>("/api/camera/close", { method: "POST" }),
@@ -475,6 +516,216 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ data }),
     }),
+
+  // ══ JARVIS v11 (mega prompt) uçları ═══════════════════════════════════════
+
+  /** Özellik 3: kamera OpenCV kurulumu. */
+  cameraInstall: () =>
+    request<{ ok: boolean; detail: string; manual_command?: string }>(
+      "/api/camera/install",
+      { method: "POST" }
+    ),
+
+  /** Özellik 4: eşleştirme tanı ucu (yalnızca PC). */
+  pairDebug: () =>
+    request<{
+      server_ip: string | null;
+      port: string;
+      bind_host: string;
+      paired_devices_count: number;
+      pairing_required: boolean;
+    }>("/api/pair/debug"),
+
+  /** Özellik 5B: kullanıcı API anahtarları (değer ASLA döner değil). */
+  listApiKeys: () =>
+    request<{ keys: { key_name: string; has_value: boolean; updated_at: string | null }[] }>(
+      "/api/user/api-keys"
+    ),
+  setApiKey: (name: string, value: string) =>
+    request<{ ok: boolean; key_name: string }>(`/api/user/api-keys/${name}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  deleteApiKey: (name: string) =>
+    request<{ ok: boolean }>(`/api/user/api-keys/${name}`, { method: "DELETE" }),
+  testApiKey: (name: string) =>
+    request<{ ok: boolean; detail: string; status?: number }>(
+      `/api/user/api-keys/test/${name}`,
+      { method: "POST" }
+    ),
+
+  /** Özellik 6: görev yöneticisi. */
+  tasks: (status = "") =>
+    request<{ tasks: import("../types").Task[] }>(
+      `/api/tasks${status ? `?status=${status}` : ""}`
+    ),
+  createTask: (payload: {
+    title: string;
+    project?: string;
+    priority?: string;
+    due_date?: string;
+  }) =>
+    request<{ task: import("../types").Task }>("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateTask: (id: number, patch: Partial<import("../types").Task>) =>
+    request<{ task: import("../types").Task }>(`/api/tasks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+  deleteTask: (id: number) =>
+    request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
+
+  /** Özellik 9: komut makroları (trigger'lı; section_f /api/macros'tan AYRI). */
+  commandMacros: () =>
+    request<{ macros: import("../types").CommandMacro[] }>("/api/command-macros"),
+  createCommandMacro: (payload: {
+    name: string;
+    trigger_phrase: string;
+    steps: { type: string; params: Record<string, unknown> }[];
+  }) =>
+    request<{ macro: import("../types").CommandMacro }>("/api/command-macros", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteCommandMacro: (id: number) =>
+    request<{ ok: boolean }>(`/api/command-macros/${id}`, { method: "DELETE" }),
+  runCommandMacro: (id: number) =>
+    request<{
+      macro: string;
+      outputs: { type: string; reply?: string; error?: string }[];
+    }>(`/api/command-macros/${id}/run`, { method: "POST" }),
+
+  /** Özellik 10: alışkanlıklar + üretkenlik. */
+  habits: () => request<{ habits: import("../types").Habit[] }>("/api/habits"),
+  createHabit: (payload: { name: string; icon?: string; color?: string }) =>
+    request<{ habit: import("../types").Habit }>("/api/habits", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteHabit: (id: number) =>
+    request<{ ok: boolean }>(`/api/habits/${id}`, { method: "DELETE" }),
+  logHabit: (id: number, completed = true) =>
+    request<{ ok: boolean }>(`/api/habits/${id}/log`, {
+      method: "POST",
+      body: JSON.stringify({ completed }),
+    }),
+  habitStats: () =>
+    request<{
+      total: number;
+      best_streak: number;
+      completion_rate: number;
+      week: { date: string; done: number; of: number }[];
+    }>("/api/habits/stats"),
+  productivityInsights: () =>
+    request<{ insight: string; source: string; data: unknown[] }>(
+      "/api/productivity/insights"
+    ),
+  productivitySession: (focus_minutes: number, mood: number) =>
+    request<{ session: unknown }>("/api/productivity/session", {
+      method: "POST",
+      body: JSON.stringify({ focus_minutes, mood }),
+    }),
+
+  /** Özellik 11: günlük özet. */
+  generateSummary: (channels = "chat") =>
+    request<{ ok: boolean; date: string; summary: string; sent: string[] }>(
+      "/api/summary/generate",
+      { method: "POST", body: JSON.stringify({ channels }) }
+    ),
+  summaryHistory: () =>
+    request<{
+      summaries: {
+        id: number;
+        date: string;
+        content: string;
+        channels: string;
+        created_at: string;
+      }[];
+    }>("/api/summary/history"),
+
+  /** Özellik 19: konum. */
+  locationDetect: () =>
+    request<{
+      ok: boolean;
+      city: string;
+      country: string;
+      timezone: string;
+      source: string;
+    }>("/api/location/detect"),
+  reverseGeocode: (lat: number, lon: number) =>
+    request<{ ok: boolean; city: string; country: string }>(
+      "/api/location/reverse-geocode",
+      { method: "POST", body: JSON.stringify({ lat, lon }) }
+    ),
+  setLocation: (city: string) =>
+    request<{ ok: boolean; city: string }>("/api/location/set", {
+      method: "PUT",
+      body: JSON.stringify({ city }),
+    }),
+
+  /** Özellik 7: ekran VISION analizi (onaylı getDisplayMedia → base64 kare).
+   * Not: Bölüm E'nin soru bazlı `screenAnalyze`'ından farklı uçtur. */
+  screenAnalyzeImage: (imageDataUrl: string) =>
+    request<{ ok: boolean; suggestion: string; detail?: string }>(
+      "/api/screen/vision",
+      { method: "POST", body: JSON.stringify({ image: imageDataUrl }) }
+    ),
+
+  /** Özellik 8: bilgi tabanı (RAG). */
+  knowledgeDocuments: () =>
+    request<{
+      documents: {
+        id: number;
+        name: string;
+        chunks_count: number;
+        status: string;
+        error: string;
+        created_at: string;
+      }[];
+    }>("/api/knowledge/documents"),
+  knowledgeUpload: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ ok: boolean; document_id: number; chunks: number }>(
+      "/api/knowledge/upload",
+      { method: "POST", body: form }
+    );
+  },
+  knowledgeDelete: (id: number) =>
+    request<{ ok: boolean }>(`/api/knowledge/${id}`, { method: "DELETE" }),
+  knowledgeSearch: (q: string) =>
+    request<{
+      results: { content: string; document_name: string; score: number }[];
+    }>(`/api/knowledge/search?q=${encodeURIComponent(q)}`),
+
+  /** Özellik 17: web ATLAS. */
+  atlasCreateTask: (instruction: string) =>
+    request<{ task_id: string; type: string; status: string }>("/api/atlas/task", {
+      method: "POST",
+      body: JSON.stringify({ instruction }),
+    }),
+  atlasTask: (id: string) =>
+    request<import("../types").AtlasTask>(`/api/atlas/task/${id}`),
+  atlasCancelTask: (id: string) =>
+    request<{ ok: boolean }>(`/api/atlas/task/${id}`, { method: "DELETE" }),
+
+  /** Özellik 14: ses cihazları (mikrofon seçimi). */
+  voiceDevices: () =>
+    request<{
+      devices: {
+        index: number;
+        name: string;
+        max_input_channels: number;
+        max_output_channels: number;
+        default_samplerate: number;
+        is_default_input: boolean;
+      }[];
+      inputs: { index: number; name: string; is_default_input: boolean }[];
+      selected: number | null;
+      sd_available: boolean;
+    }>("/api/voice/devices"),
 };
 
 /** Bölüm G: gizlilik/sağlık uçları — /api önekli yardımcı.

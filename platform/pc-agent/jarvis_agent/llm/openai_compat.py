@@ -131,6 +131,7 @@ class OpenAICompatProvider(ChatProvider):
                 tool_calls=tool_calls,
                 finish_reason=choice.get("finish_reason", "stop"),
                 model=data.get("model", self.model),
+                tokens_used=int((data.get("usage") or {}).get("total_tokens") or 0),
             )
         except (KeyError, ValueError, TypeError) as exc:
             raise ProviderError(f"{self.name} yanıtı ayrıştırılamadı: {exc}") from exc

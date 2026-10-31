@@ -4,7 +4,7 @@
 ; NOT: .env (API anahtarları) KASTEN dahil edilmez — kullanıcı EXE yanına koyar.
 
 #define MyAppName "JARVIS"
-#define MyAppVersion "10.0.0"
+#define MyAppVersion "11.0.0"
 #define MyAppPublisher "JARVIS Project"
 #define MyAppExeName "JARVIS.exe"
 

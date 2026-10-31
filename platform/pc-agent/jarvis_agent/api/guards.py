@@ -28,6 +28,10 @@ GUEST_ALLOWED_PREFIXES = (
     # Memory Bank okuması misafire açıktır; misafir sahibinin kaydı yoktur →
     # liste boş döner. Yazma/silme uç içi require_not_guest ile 403'lenir.
     "/api/memory",
+    # Özellik 19: okuma amaçlı konum tespiti (hava durumu için) misafire açık;
+    # /api/location/set misafir için uç içinde 403 döner.
+    "/api/location/detect",
+    "/api/location/reverse-geocode",
 )
 
 GUEST_DENIED_MESSAGE = "Misafir modunda bu özellik kullanılamaz."

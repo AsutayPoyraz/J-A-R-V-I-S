@@ -1,7 +1,11 @@
 /** Ayarlar modalı: tema (madde 4), dil (madde 3), panel konumu (madde 32),
- * şehir ve ses ayarları (Faz 3). Tüm metinler i18n'den gelir. */
+ * şehir ve ses ayarları (Faz 3). Tüm metinler i18n'den gelir.
+ * v11: "API Anahtarları" (Özellik 5B) ve "Mikrofon" (Özellik 14) sekmeleri. */
 import { useEffect, useState } from "react";
 import { t, getLang } from "../i18n";
+import { api } from "../api/client";
+import { sanitizeSettings } from "../utils/sanitize";
+import ApiKeysSettings from "./ApiKeysSettings";
 import type {
   AppSettings,
   ChatPanelPosition,
@@ -17,6 +21,8 @@ interface Props {
   health: { llm_provider: string; llm_ready: boolean } | null;
   integrations: Record<string, { configured: boolean; connected?: boolean; reachable?: boolean; detail?: string }> | null;
   voice: VoiceStatus | null;
+  /** Özellik 5B: API anahtarları sekmesi için oturum sahibi. */
+  user?: { user_id: string; username?: string } | null;
   onClose: () => void;
   onSave: (patch: {
     background_color?: AppSettings["background_color"];
@@ -72,8 +78,10 @@ const inputCls = "w-full rounded-lg border bg-black/30 px-3 py-2 text-sm outline
 const inputStyle = { borderColor: "var(--border)" };
 
 export default function SettingsModal({
-  open, settings, online, health, integrations, voice, onClose, onSave, onSaveVoice, onChangeLanguage,
+  open, settings, online, health, integrations, voice, user = null, onClose, onSave, onSaveVoice, onChangeLanguage,
 }: Props) {
+  // v11: sekme gezinmesi (genel | apikeys | mikrofon)
+  const [tab, setTab] = useState<"genel" | "apikeys" | "mikrofon">("genel");
   const [color, setColor] = useState<AppSettings["background_color"]>("maroon");
   const [city, setCity] = useState("");
   const [chatPosition, setChatPosition] = useState<ChatPanelPosition>("right");
@@ -125,8 +133,8 @@ export default function SettingsModal({
     setError(null);
     try {
       // Madde 7/32: tema, şehir ve panel konumu kullanıcıya özel DB'de saklanır.
-      // Prompt 0/4: custom seçiliyse palet de gönderilir.
-      await onSave({
+      // Özellik 13: gönderim öncesi sanitizeSettings ile null/undefined normalizasyonu.
+      const payload = sanitizeSettings({
         background_color: color,
         city: city.trim() || undefined,
         chat_panel_position: chatPosition,
@@ -138,6 +146,7 @@ export default function SettingsModal({
             ? { accent: hexToRgb(customAccent), bg_page: customBg }
             : undefined,
       });
+      await onSave(payload as Parameters<typeof onSave>[0]);
       const wakes = wakeText.split("\n").map((l) => l.trim()).filter((l) => l.length >= 4).slice(0, 12);
       const exits = exitText.split(",").map((l) => l.trim()).filter((l) => l.length >= 3).slice(0, 12);
       await onSaveVoice({
@@ -165,6 +174,38 @@ export default function SettingsModal({
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-200">{t("settings.title")}</h2>
           <button type="button" onClick={onClose} className="btn-accent rounded-md px-2 py-1 text-xs">✕</button>
         </div>
+
+        {/* v11: sekme gezinmesi */}
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-lg border p-0.5" style={{ borderColor: "var(--border)" }}>
+          {(
+            [
+              ["genel", "⚙️ Genel"],
+              ["apikeys", "🔑 API Anahtarları"],
+              ["mikrofon", "🎤 Mikrofon"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className="min-h-[44px] rounded-md text-[11px] font-medium transition-colors"
+              style={{
+                background: tab === key ? "rgb(var(--accent-rgb) / 0.25)" : "transparent",
+                color: tab === key ? "rgb(var(--accent-soft-rgb))" : "rgb(148 163 184)",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Özellik 5B: kullanıcı bazlı API anahtarları */}
+        {tab === "apikeys" && <ApiKeysSettings user={user} />}
+
+        {/* Özellik 14: mikrofon cihazı seçimi + tarayıcı izin testi */}
+        {tab === "mikrofon" && <MicSection />}
+
+        {tab === "genel" && (<>
 
         {/* Dil (madde 3) — seçim anında uygulanır ve DB'ye yazılır */}
         <div className="mb-5">
@@ -503,15 +544,119 @@ export default function SettingsModal({
 
         {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
 
+        </>)}
+
         <button
           type="button"
-          onClick={save}
+          onClick={tab === "genel" ? save : onClose}
           disabled={saving || !online}
           className="btn-accent w-full rounded-lg py-2.5 text-sm font-semibold"
         >
-          {saving ? "Kaydediliyor..." : "Kaydet"}
+          {saving ? "Kaydediliyor..." : tab === "genel" ? "Kaydet" : "Kapat"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Özellik 14: mikrofon cihazları + tarayıcı izin akışı (hata türü bazlı mesajlar). */
+function MicSection() {
+  const [devices, setDevices] = useState<
+    { index: number; name: string; max_input_channels: number; is_default_input: boolean }[]
+  >([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [sdAvailable, setSdAvailable] = useState(true);
+  const [permStatus, setPermStatus] = useState<string>("");
+  const [micError, setMicError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const resp = await api.voiceDevices();
+        setDevices(resp.devices.filter((d) => d.max_input_channels > 0));
+        setSelected(resp.selected);
+        setSdAvailable(resp.sd_available);
+      } catch {
+        /* offline */
+      }
+    })();
+  }, []);
+
+  /** Özellik 14.1: navigator.permissions + getUserMedia hata eşlemesi. */
+  const testBrowserPermission = async () => {
+    setMicError(null);
+    setPermStatus("");
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({
+          name: "microphone" as PermissionName,
+        });
+        if (status.state === "denied") {
+          setMicError(
+            "Tarayıcı mikrofon iznini reddetti. Adres çubuğundaki kilit simgesine tıklayıp izin verin."
+          );
+          return;
+        }
+        setPermStatus(
+          status.state === "granted" ? "İzin zaten verilmiş ✓" : "İzin sorulacak…"
+        );
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      setPermStatus("✅ Tarayıcı mikrofonu erişilebilir");
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : "";
+      if (name === "NotAllowedError") {
+        setMicError(
+          "Tarayıcı mikrofon iznini reddetti. Adres çubuğundaki kilit simgesine tıklayıp izin verin."
+        );
+      } else if (name === "NotFoundError") {
+        setMicError("Cihazda mikrofon bulunamadı.");
+      } else if (name === "NotReadableError") {
+        setMicError("Mikrofon başka bir uygulama tarafından kullanılıyor.");
+      } else {
+        setMicError(
+          e instanceof Error ? e.message : "Bilinmeyen mikrofon hatası"
+        );
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-2 text-[11px]">
+      <p className="text-slate-400">
+        Sunucu (PC) ses cihazları — voice modu bunlardan birini kullanır:
+      </p>
+      {!sdAvailable && (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-amber-200">
+          sounddevice kurulu değil — ses modu devre dışı.
+        </p>
+      )}
+      <select
+        value={selected ?? ""}
+        onChange={(e) => setSelected(Number(e.target.value))}
+        className="min-h-[44px] w-full rounded-lg border bg-black/30 px-2 py-2 text-slate-200 outline-none"
+        style={{ borderColor: "var(--border)" }}
+        title="Seçim sunucuda JARVIS_AUDIO_INPUT_DEVICE ortam değişkeni ile değiştirilebilir"
+      >
+        {devices.map((d) => (
+          <option key={d.index} value={d.index}>
+            [{d.index}] {d.name}
+            {d.is_default_input ? " (varsayılan)" : ""}
+          </option>
+        ))}
+        {devices.length === 0 && <option value="">Giriş cihazı bulunamadı</option>}
+      </select>
+      <button
+        type="button"
+        onClick={() => void testBrowserPermission()}
+        className="min-h-[44px] w-full rounded-lg border py-2 text-xs text-slate-300 hover:bg-white/5"
+        style={{ borderColor: "var(--border)" }}
+      >
+        🎙️ Tarayıcı mikrofon iznini test et
+      </button>
+      {permStatus && <p className="text-emerald-400">{permStatus}</p>}
+      {micError && <p className="text-rose-400">{micError}</p>}
     </div>
   );
 }

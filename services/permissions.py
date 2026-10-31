@@ -135,7 +135,7 @@ class PermissionManager:
 
     def __init__(self, settings: dict, audit_log_fn: Callable | None = None):
         """
-        settings  : jarvis_v10.py'deki SETTINGS dict'i (canlı referans)
+        settings  : jarvis_v11.py'deki SETTINGS dict'i (canlı referans)
         audit_log_fn : db_log_action(category, description, result) imzalı fonksiyon
         """
         self._settings = settings

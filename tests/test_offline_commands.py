@@ -2,7 +2,7 @@ import datetime
 import unittest
 from types import SimpleNamespace
 
-import jarvis_v10
+import jarvis_v11
 from services.offline_commands import handle_offline_command
 
 
@@ -49,7 +49,7 @@ class OfflineCommandTests(unittest.TestCase):
         self.assertIn("Genel AI yanıtları için internet gerekir", response)
 
     def test_main_window_routes_offline_commands_before_other_features(self):
-        response = jarvis_v10.JarvisWindow._handle_special(
+        response = jarvis_v11.JarvisWindow._handle_special(
             SimpleNamespace(),
             "hesapla: 6 * 7",
         )

@@ -3,18 +3,18 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-import jarvis_v10
+import jarvis_v11
 
 
 class AIToolRoutingTests(unittest.TestCase):
     def setUp(self):
-        self.engine = object.__new__(jarvis_v10.AIEngine)
+        self.engine = object.__new__(jarvis_v11.AIEngine)
         self.engine.client = mock.Mock()
         self.engine.client.chat.completions.create.return_value = iter(())
 
     def _stream(self, prompt):
-        with mock.patch.object(jarvis_v10, "build_persona", return_value="persona"), \
-             mock.patch.object(jarvis_v10, "REMOTE_CONTEXT_ENABLED", False):
+        with mock.patch.object(jarvis_v11, "build_persona", return_value="persona"), \
+             mock.patch.object(jarvis_v11, "REMOTE_CONTEXT_ENABLED", False):
             return list(self.engine.stream([], prompt))
 
     def test_conversation_does_not_offer_desktop_tools_to_model(self):
@@ -43,7 +43,7 @@ class AIToolRoutingTests(unittest.TestCase):
             _automation=mock.Mock(),
         )
 
-        jarvis_v10.JarvisWindow._on_tool_call(
+        jarvis_v11.JarvisWindow._on_tool_call(
             window,
             json.dumps({
                 "name": "open_url",
@@ -64,7 +64,7 @@ class AIToolRoutingTests(unittest.TestCase):
             _automation=mock.Mock(),
         )
 
-        jarvis_v10.JarvisWindow._on_tool_call(
+        jarvis_v11.JarvisWindow._on_tool_call(
             window,
             json.dumps({
                 "name": "open_url",

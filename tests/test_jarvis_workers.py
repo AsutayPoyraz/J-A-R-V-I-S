@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-import jarvis_v10
+import jarvis_v11
 from services.permissions import ActionCategory
 
 
@@ -52,19 +52,19 @@ class HardwareSamplingTests(unittest.TestCase):
         psutil.cpu_percent.return_value = 12
         psutil.virtual_memory.return_value = mock.Mock(percent=40, used=1024**3)
         psutil.sensors_battery.return_value = None
-        with mock.patch.object(jarvis_v10, "PSUTIL_OK", True), mock.patch.object(
-            jarvis_v10, "psutil", psutil
+        with mock.patch.object(jarvis_v11, "PSUTIL_OK", True), mock.patch.object(
+            jarvis_v11, "psutil", psutil
         ):
-            result = jarvis_v10.get_hw()
+            result = jarvis_v11.get_hw()
 
         self.assertEqual(result["cpu"], 12)
         psutil.cpu_percent.assert_called_once_with(interval=None)
 
     def test_pdf_worker_runs_loader_in_worker_run_method(self):
-        worker = jarvis_v10.PdfLoadWorker("sample.pdf")
+        worker = jarvis_v11.PdfLoadWorker("sample.pdf")
         received = []
         worker.result.connect(received.append)
-        with mock.patch.object(jarvis_v10, "load_pdf", return_value="loaded") as load:
+        with mock.patch.object(jarvis_v11, "load_pdf", return_value="loaded") as load:
             worker.run()
 
         load.assert_called_once_with("sample.pdf")
@@ -74,11 +74,11 @@ class HardwareSamplingTests(unittest.TestCase):
         side_worker = _Worker()
         hardware_worker = _Worker()
         with mock.patch.object(
-            jarvis_v10, "SidePanelWorker", return_value=side_worker
+            jarvis_v11, "SidePanelWorker", return_value=side_worker
         ), mock.patch.object(
-            jarvis_v10, "HardwareWorker", return_value=hardware_worker
+            jarvis_v11, "HardwareWorker", return_value=hardware_worker
         ):
-            panel = jarvis_v10.LeftPanel()
+            panel = jarvis_v11.LeftPanel()
             try:
                 panel._hw()
                 self.assertTrue(hardware_worker.started)
@@ -95,11 +95,11 @@ class HardwareSamplingTests(unittest.TestCase):
 
     def test_left_panel_low_bandwidth_mode_suppresses_automatic_network_refresh(self):
         with mock.patch.object(
-            jarvis_v10,
+            jarvis_v11,
             "SidePanelWorker",
             side_effect=AssertionError("unexpected network request"),
         ):
-            panel = jarvis_v10.LeftPanel(
+            panel = jarvis_v11.LeftPanel(
                 low_bandwidth_mode=True,
                 low_resource_mode=True,
             )
@@ -115,7 +115,7 @@ class HardwareSamplingTests(unittest.TestCase):
                 panel.deleteLater()
 
     def test_ai_worker_honors_cancellation_between_stream_chunks(self):
-        worker = jarvis_v10.AIWorker(
+        worker = jarvis_v11.AIWorker(
             engine=mock.Mock(stream=lambda *_, **__: iter(["first chunk", "second chunk"])),
             history=[],
             msg="test",
@@ -156,7 +156,7 @@ class HardwareSamplingTests(unittest.TestCase):
             stream_callback(response)
             yield from response
 
-        worker = jarvis_v10.AIWorker(
+        worker = jarvis_v11.AIWorker(
             engine=mock.Mock(stream=engine_stream),
             history=[],
             msg="test",
@@ -180,12 +180,12 @@ class HardwareSamplingTests(unittest.TestCase):
                 cancel.set()
                 return object()
 
-        worker = jarvis_v10.ResearchWorker("test query", "flash", None, True)
+        worker = jarvis_v11.ResearchWorker("test query", "flash", None, True)
         received = {"results": [], "cancelled": []}
         worker.result.connect(received["results"].append)
         worker.cancelled.connect(lambda: received["cancelled"].append(True))
         with mock.patch.object(
-            jarvis_v10, "get_research_engine", return_value=_ResearchEngine()
+            jarvis_v11, "get_research_engine", return_value=_ResearchEngine()
         ):
             worker.run()
 
@@ -193,7 +193,7 @@ class HardwareSamplingTests(unittest.TestCase):
         self.assertEqual(received["cancelled"], [True])
 
     def test_new_management_dialogs_open_and_close_cleanly(self):
-        window = jarvis_v10.JarvisWindow()
+        window = jarvis_v11.JarvisWindow()
 
         def close_active_modal():
             modal = self.app.activeModalWidget()
@@ -212,7 +212,7 @@ class HardwareSamplingTests(unittest.TestCase):
                     QTimer.singleShot(50, close_active_modal)
                     if method_name == "_show_memory_controls":
                         with mock.patch.object(
-                            jarvis_v10, "atlas_memory_list_sources", return_value=[]
+                            jarvis_v11, "atlas_memory_list_sources", return_value=[]
                         ):
                             getattr(window, method_name)()
                     elif method_name == "_check_for_updates":
@@ -222,7 +222,7 @@ class HardwareSamplingTests(unittest.TestCase):
                         # doğrularız; gerçek ağ çağrısı yapılmaz.
                         fake = _Worker()
                         with mock.patch.object(
-                            jarvis_v10, "UpdateCheckWorker", return_value=fake
+                            jarvis_v11, "UpdateCheckWorker", return_value=fake
                         ):
                             getattr(window, method_name)()
                             fake.error.emit("update source unavailable")
@@ -232,7 +232,7 @@ class HardwareSamplingTests(unittest.TestCase):
         finally:
             window._automation.stop()
             window.left.prepare_for_shutdown()
-            for timer in window.findChildren(jarvis_v10.QTimer):
+            for timer in window.findChildren(jarvis_v11.QTimer):
                 timer.stop()
             window._shutdown_complete = True
             window.close()
@@ -241,11 +241,11 @@ class HardwareSamplingTests(unittest.TestCase):
 
     def test_send_enforces_session_permission_and_replays_only_after_approval(self):
         with mock.patch.object(
-            jarvis_v10, "SidePanelWorker", return_value=_Worker()
+            jarvis_v11, "SidePanelWorker", return_value=_Worker()
         ), mock.patch.object(
-            jarvis_v10, "HardwareWorker", return_value=_Worker()
+            jarvis_v11, "HardwareWorker", return_value=_Worker()
         ):
-            window = jarvis_v10.JarvisWindow()
+            window = jarvis_v11.JarvisWindow()
         window.history = [{"role": "user", "content": "earlier message"}]
         window.permission_manager.set_preference(
             ActionCategory.PAYMENT, "session"
@@ -255,11 +255,11 @@ class HardwareSamplingTests(unittest.TestCase):
             with mock.patch.object(
                 window, "_handle_special", return_value="İşlem onaylandı."
             ) as handler, mock.patch.object(
-                jarvis_v10, "db_save_msg"
-            ), mock.patch.object(jarvis_v10, "style_update"), mock.patch.object(
-                jarvis_v10, "speak_async"
+                jarvis_v11, "db_save_msg"
+            ), mock.patch.object(jarvis_v11, "style_update"), mock.patch.object(
+                jarvis_v11, "speak_async"
             ), mock.patch.object(
-                jarvis_v10.QTimer, "singleShot"
+                jarvis_v11.QTimer, "singleShot"
             ):
                 window.input_box.setText(request)
                 window._send()
@@ -290,7 +290,7 @@ class HardwareSamplingTests(unittest.TestCase):
         finally:
             window._automation.stop()
             window.left.prepare_for_shutdown()
-            for timer in window.findChildren(jarvis_v10.QTimer):
+            for timer in window.findChildren(jarvis_v11.QTimer):
                 timer.stop()
             window._shutdown_complete = True
             window.close()
@@ -320,61 +320,61 @@ class UpdateCheckFlowTests(unittest.TestCase):
     def test_auto_check_skipped_when_device_pref_disabled(self):
         window = self._fake_window()
         with mock.patch.object(
-            jarvis_v10, "load_device_pref", return_value=False
+            jarvis_v11, "load_device_pref", return_value=False
         ):
-            jarvis_v10.JarvisWindow._maybe_auto_check_updates(window)
+            jarvis_v11.JarvisWindow._maybe_auto_check_updates(window)
         window._start_update_check.assert_not_called()
 
     def test_auto_check_skipped_in_low_bandwidth_mode(self):
         window = self._fake_window(low_bandwidth_mode=True)
         with mock.patch.object(
-            jarvis_v10, "load_device_pref", return_value=True
+            jarvis_v11, "load_device_pref", return_value=True
         ):
-            jarvis_v10.JarvisWindow._maybe_auto_check_updates(window)
+            jarvis_v11.JarvisWindow._maybe_auto_check_updates(window)
         window._start_update_check.assert_not_called()
 
     def test_auto_check_skipped_when_update_source_not_configured(self):
         window = self._fake_window()
         with mock.patch.object(
-            jarvis_v10, "load_device_pref", return_value=True
+            jarvis_v11, "load_device_pref", return_value=True
         ), mock.patch.object(
-            jarvis_v10, "is_update_check_configured", return_value=False
+            jarvis_v11, "is_update_check_configured", return_value=False
         ):
-            jarvis_v10.JarvisWindow._maybe_auto_check_updates(window)
+            jarvis_v11.JarvisWindow._maybe_auto_check_updates(window)
         window._start_update_check.assert_not_called()
 
     def test_auto_check_skipped_while_closing(self):
         window = self._fake_window(_closing=True)
-        jarvis_v10.JarvisWindow._maybe_auto_check_updates(window)
+        jarvis_v11.JarvisWindow._maybe_auto_check_updates(window)
         window._start_update_check.assert_not_called()
 
     def test_auto_check_starts_quiet_background_check_when_guards_pass(self):
         window = self._fake_window()
         with mock.patch.object(
-            jarvis_v10, "load_device_pref", return_value=True
+            jarvis_v11, "load_device_pref", return_value=True
         ), mock.patch.object(
-            jarvis_v10, "is_update_check_configured", return_value=True
+            jarvis_v11, "is_update_check_configured", return_value=True
         ):
-            jarvis_v10.JarvisWindow._maybe_auto_check_updates(window)
+            jarvis_v11.JarvisWindow._maybe_auto_check_updates(window)
         window._start_update_check.assert_called_once_with(manual=False)
 
     def test_update_check_worker_emits_result_from_background(self):
-        worker = jarvis_v10.UpdateCheckWorker()
+        worker = jarvis_v11.UpdateCheckWorker()
         received = []
         worker.result.connect(received.append)
         info = mock.Mock(update_available=False)
         with mock.patch.object(
-            jarvis_v10, "check_for_update", return_value=info
+            jarvis_v11, "check_for_update", return_value=info
         ):
             worker.run()
         self.assertEqual(received, [info])
 
     def test_update_check_worker_emits_error_message_on_failure(self):
-        worker = jarvis_v10.UpdateCheckWorker()
+        worker = jarvis_v11.UpdateCheckWorker()
         received = []
         worker.error.connect(received.append)
         with mock.patch.object(
-            jarvis_v10,
+            jarvis_v11,
             "check_for_update",
             side_effect=ValueError("update source unavailable"),
         ):

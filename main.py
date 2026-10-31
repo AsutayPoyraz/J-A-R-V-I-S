@@ -1,4 +1,4 @@
-"""J.A.R.V.I.S. application entry point."""
+"""J.A.R.V.I.S. v11 application entry point."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def main() -> None:
         _run_api(args.host, args.port)
         return
 
-    from jarvis_v10 import main as desktop_main
+    from jarvis_v11 import main as desktop_main
 
     desktop_main()
 

@@ -103,3 +103,20 @@ def remove_device(device_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Cihaz bulunamadı.")
     database.audit("pair.revoke", actor="elevated", detail=str(device_id)[:60])
     return {"revoked": device_id}
+
+
+@router.get("/api/pair/debug")
+def pair_debug(request: Request) -> dict:
+    """Özellik 4.6: eşleştirme tanı bilgisi (yalnızca loopback'ten)."""
+    if not _is_loopback(request):
+        raise HTTPException(status_code=403, detail="Tanı ucu yalnızca PC'den erişilir.")
+    return {
+        "server_ip": security.lan_ip(),
+        "port": config.env("JARVIS_PORT", "8000"),
+        "bind_host": config.env("JARVIS_BIND", "127.0.0.1"),
+        "cors_origins": config.env("JARVIS_CORS_ORIGINS", ""),
+        "cors_allow_lan": config.env("JARVIS_CORS_ALLOW_LAN", ""),
+        "active_code": security.pending_code_info(),
+        "paired_devices_count": len(security.list_devices()),
+        "pairing_required": security.required(),
+    }

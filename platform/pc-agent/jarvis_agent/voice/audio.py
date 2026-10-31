@@ -49,6 +49,69 @@ def has_audio_backend() -> bool:
         return False
 
 
+def list_input_devices() -> list[dict]:
+    """Özellik 14.3: sistemdeki tüm ses cihazları (giriş/çıkış ayrıntısı)."""
+    if not _SD_AVAILABLE:
+        return []
+    try:
+        raw = sd.query_devices()
+    except Exception:
+        return []
+    devices = []
+    try:
+        default_input = int(sd.default.device[0])
+    except Exception:  # noqa: BLE001
+        default_input = -1
+    for index, dev in enumerate(raw):
+        devices.append(
+            {
+                "index": index,
+                "name": str(dev.get("name") or ""),
+                "max_input_channels": int(dev.get("max_input_channels") or 0),
+                "max_output_channels": int(dev.get("max_output_channels") or 0),
+                "default_samplerate": float(dev.get("default_samplerate") or 0),
+                "is_default_input": index == default_input,
+            }
+        )
+    return devices
+
+
+def resolve_input_device() -> Optional[int]:
+    """JARVIS_AUDIO_INPUT_DEVICE override'ını çözer (index veya isim).
+
+    Özellik 14.2: hiçbir giriş cihazı yoksa JARVIS_VOICE_DISABLED=1 geçici
+    set edilir ve MicrophoneError fırlatılır.
+    """
+    import os
+
+    devices = list_input_devices()
+    inputs = [d for d in devices if d["max_input_channels"] > 0]
+    if not inputs:
+        if _SD_AVAILABLE:
+            os.environ["JARVIS_VOICE_DISABLED"] = "1"
+        raise MicrophoneError(
+            "Bu cihazda mikrofon (giriş) bulunamadı. JARVIS_VOICE_DISABLED=1 ayarlandı."
+        )
+    override = os.getenv("JARVIS_AUDIO_INPUT_DEVICE", "").strip()
+    if not override:
+        default = [d for d in inputs if d["is_default_input"]]
+        return default[0]["index"] if default else inputs[0]["index"]
+    if override.isdigit():
+        index = int(override)
+        if any(d["index"] == index and d["max_input_channels"] > 0 for d in inputs):
+            return index
+        raise MicrophoneError(
+            f"JARVIS_AUDIO_INPUT_DEVICE={override} geçerli bir giriş cihazı değil."
+        )
+    lowered = override.lower()
+    for dev in inputs:
+        if lowered in dev["name"].lower():
+            return dev["index"]
+    raise MicrophoneError(
+        f"İsimle eşleşen giriş cihazı bulunamadı: {override}"
+    )
+
+
 class MicrophoneStream:
     """Arka plan iş parçacığında blok okuyan, kuyruk temelli mikrofon akışı."""
 

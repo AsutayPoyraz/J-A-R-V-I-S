@@ -25,9 +25,14 @@ _OPENAI_COMPAT_BASE_URLS = {
 
 def _has_key(choice: str) -> bool:
     keys = {
+        "gemini": config.GEMINI_API_KEY,
+        "deepseek": config.DEEPSEEK_API_KEY,
         "groq": config.GROQ_API_KEY,
+        "llama": config.GROQ_API_KEY,
         "openai": config.OPENAI_API_KEY,
         "anthropic": config.ANTHROPIC_API_KEY,
+        "mock": "mock",
+        "ollama": config.OLLAMA_URL,
     }
     return bool(keys.get(choice))
 
@@ -45,14 +50,32 @@ def build_provider() -> ChatProvider:
 
     model_override = config.env("JARVIS_LLM_MODEL")
 
-    if choice == "groq":
+    if choice == "gemini":
+        from .gemini_provider import GeminiProvider
+
+        return GeminiProvider(
+            api_key=config.GEMINI_API_KEY,
+            model=model_override or config.DEFAULT_MODELS["gemini"],
+        )
+    if choice == "deepseek":
+        from .deepseek_provider import DeepSeekProvider
+
+        return DeepSeekProvider(
+            api_key=config.DEEPSEEK_API_KEY,
+            model=model_override or config.DEFAULT_MODELS["deepseek"],
+        )
+    if choice in ("groq", "llama"):
+        model = (
+            model_override
+            or (config.DEFAULT_MODELS["llama"] if choice == "llama" else config.GROQ_MODEL)
+        )
         return OpenAICompatProvider(
-            name="groq",
+            name="groq" if choice == "groq" else "llama",
             base_url=config.env(
                 "JARVIS_GROQ_BASE_URL", _OPENAI_COMPAT_BASE_URLS["groq"]
             ),
             api_key=config.GROQ_API_KEY,
-            model=model_override or config.GROQ_MODEL,
+            model=model,
         )
     if choice == "openai":
         return OpenAICompatProvider(

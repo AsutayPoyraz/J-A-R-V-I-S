@@ -4,7 +4,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import jarvis_v10
+import jarvis_v11
 from services import currency
 
 
@@ -12,12 +12,12 @@ class CurrencyIntentTests(unittest.TestCase):
     def test_supported_currency_queries_are_recognized(self):
         for text in ("dolar ne kadar", "10 dolar kaç tl", "euro kuru nedir"):
             with self.subTest(text=text):
-                self.assertTrue(jarvis_v10.is_currency_query(text))
+                self.assertTrue(jarvis_v11.is_currency_query(text))
 
     def test_regular_chat_is_not_routed_to_currency_worker(self):
         for text in ("bana espri yap", "bugün hava nasıl", "merhaba"):
             with self.subTest(text=text):
-                self.assertFalse(jarvis_v10.is_currency_query(text))
+                self.assertFalse(jarvis_v11.is_currency_query(text))
 
     def test_amount_conversion_uses_injected_rates(self):
         result = currency.parse_currency_query(

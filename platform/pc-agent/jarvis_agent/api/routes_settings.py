@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .. import config
 from ..store import database
@@ -42,7 +42,13 @@ def _clamp_float(value: float | None, low: float, high: float, default: float) -
 
 
 class SettingsUpdate(BaseModel):
-    """Kısmi ayar güncellemesi; yalnızca gönderilen alanlar değişir."""
+    """Kısmi ayar güncellemesi; yalnızca gönderilen alanlar değişir.
+
+    Özellik 13: tüm string alanlar null-safe + trim edilir (None → None kalır,
+    boş string '' korunur; sadece boşluk içerenler '' olur) — frontend'deki
+    'Cannot read properties of null (reading trim)' kök nedeninin sunucu
+    tarafı savunması.
+    """
 
     background_color: str | None = None
     city: str | None = None
@@ -70,6 +76,21 @@ class SettingsUpdate(BaseModel):
     focus_mode: bool | None = None
     # Sürükle-bırak widget sırası (madde 26); boş liste → sıfırla
     dashboard_layout: list[str] | None = None
+
+    @field_validator(
+        "background_color", "city", "language", "chat_position",
+        "chat_panel_position", "conversation_mode", "tts_voice",
+        "persona_name", "persona_style",
+        mode="before",
+    )
+    @classmethod
+    def _null_safe_trim(cls, value: object) -> object | None:
+        """None dışındaki değerleri string'e çevirip trim eder (Özellik 13)."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            value = str(value)
+        return value.strip()
 
 
 @router.get("/api/settings")

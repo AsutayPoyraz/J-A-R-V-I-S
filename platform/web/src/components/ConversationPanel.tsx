@@ -12,6 +12,9 @@ interface Props {
   onSend: (text: string) => void;
   onClear: () => void;
   onExport: (format: "txt" | "md") => void;
+  /** Özellik 18: sağlayıcı seçici (varsayılan "Otomatik" → Gemini'den başlar). */
+  providerPref?: string;
+  onProviderChange?: (provider: string) => void;
 }
 
 function timeOf(iso: string): string {
@@ -21,6 +24,17 @@ function timeOf(iso: string): string {
     return "";
   }
 }
+
+/** Sağlayıcı etiketi (Özellik 18.5): "Yanıtlayan: Gemini" / fallback notu. */
+const PROVIDER_NAMES: Record<string, string> = {
+  gemini: "Gemini",
+  deepseek: "DeepSeek R1",
+  groq: "Groq",
+  llama: "Llama 3.3 70B",
+  openai: "OpenAI",
+  anthropic: "Claude",
+  mock: "Demo",
+};
 
 function Bubble({ m }: { m: ChatMessage }) {
   if (m.role === "system") {
@@ -53,6 +67,12 @@ function Bubble({ m }: { m: ChatMessage }) {
           {m.content}
         </p>
         <p className="mt-1 text-right text-[9px] tabular-nums text-slate-500">
+          {m.provider && m.role === "assistant" && (
+            <span className="mr-1.5 normal-case tracking-normal">
+              Yanıtlayan: {PROVIDER_NAMES[m.provider] ?? m.provider}
+              {m.fallback ? " (tercihiniz müsait değildi)" : ""}
+            </span>
+          )}
           {timeOf(m.created_at)}
         </p>
       </div>
@@ -61,7 +81,7 @@ function Bubble({ m }: { m: ChatMessage }) {
 }
 
 const ConversationPanel = forwardRef<HTMLInputElement, Props>(
-  ({ messages, sending, online, lastError, onSend, onClear, onExport }, inputRef) => {
+  ({ messages, sending, online, lastError, onSend, onClear, onExport, providerPref = "", onProviderChange }, inputRef) => {
     const [draft, setDraft] = useState("");
     const [confirmingClear, setConfirmingClear] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
@@ -187,7 +207,21 @@ const ConversationPanel = forwardRef<HTMLInputElement, Props>(
 
         <footer className="border-t p-2.5" style={{ borderColor: "var(--border)" }}>
           {lastError && <p className="mb-1.5 text-[10px] text-red-400">{lastError}</p>}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Özellik 18.4: sağlayıcı seçici (Otomatik = gemini → fallback zinciri) */}
+            <select
+              value={providerPref}
+              onChange={(e) => onProviderChange?.(e.target.value)}
+              className="h-9 shrink-0 rounded-lg border bg-black/30 px-1 text-[10px] text-slate-300 outline-none"
+              style={{ borderColor: "var(--border)" }}
+              title="LLM sağlayıcı tercihi (hata olursa otomatik sıradakine geçilir)"
+            >
+              <option value="">🤖 Otomatik</option>
+              <option value="gemini">✦ Gemini</option>
+              <option value="deepseek">⬢ DeepSeek</option>
+              <option value="groq">⚡ Groq</option>
+              <option value="llama">🦙 Llama 3.3</option>
+            </select>
             <input
               ref={inputRef}
               value={draft}
@@ -202,7 +236,7 @@ const ConversationPanel = forwardRef<HTMLInputElement, Props>(
               type="button"
               onClick={submit}
               disabled={!online || !draft.trim() || sending}
-              className="btn-accent grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              className="btn-accent grid h-9 min-h-[44px] w-9 shrink-0 place-items-center rounded-lg"
               title={t("chat.send")}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none">

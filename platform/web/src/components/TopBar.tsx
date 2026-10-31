@@ -63,6 +63,12 @@ export default function TopBar({ online, weather, onOpenSettings, onOpenDrawer }
           J.A.R.V.I.S
         </span>
         <span
+          className="hidden select-none rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-slate-300 sm:inline-block"
+          title="JARVIS ürün sürümü (v11)"
+        >
+          v11
+        </span>
+        <span
           className="hidden items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wider sm:inline-flex"
           style={{
             borderColor: online ? "rgb(34 197 94 / 0.5)" : "rgb(239 68 68 / 0.5)",

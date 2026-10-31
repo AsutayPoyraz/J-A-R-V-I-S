@@ -32,6 +32,11 @@ class ChatResult:
     tool_calls: list[ToolCall] = field(default_factory=list)
     finish_reason: str = "stop"
     model: str = ""
+    # Özellik 12: token sarfiyatı (sağlayıcı usage alanı varsa dolar).
+    tokens_used: int = 0
+    # Özellik 18: yönlendirici meta bilgisi.
+    used_provider: str = ""
+    fallback_occurred: bool = False
 
 
 class ProviderError(RuntimeError):

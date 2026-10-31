@@ -230,12 +230,15 @@ def test_unknown_route_404_json(client):
 
 def test_provider_factory_falls_back_to_mock(monkeypatch):
     # Anahtarların tümü boş + sağlayıcı seçimi yok → mock
+    # (Özellik 18: gemini/deepseek önceliği eklendi; hepsi temizlenmeli)
     monkeypatch.delenv("JARVIS_LLM_PROVIDER", raising=False)
     monkeypatch.setattr(config, "GROQ_API_KEY", "")
     monkeypatch.setattr(config, "OPENAI_API_KEY", "")
     monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "")
     monkeypatch.setattr(config, "OLLAMA_URL", "")
     monkeypatch.setattr(config, "LLM_PROVIDER", "")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "")
     import jarvis_agent.llm as llm_pkg
     provider = llm_pkg.build_provider()
     assert provider.name == "mock"

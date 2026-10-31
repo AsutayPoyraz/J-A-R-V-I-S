@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,6 +32,15 @@ from .api import (
     routes_voice,
     routes_integrations,
     routes_smart_home,
+    routes_tasks,
+    routes_macros,
+    routes_habits,
+    routes_summary,
+    routes_location,
+    routes_screen,
+    routes_knowledge,
+    routes_atlas,
+    routes_user_settings,
 )
 from . import security
 from .api import routes_critical
@@ -127,7 +137,7 @@ def create_app() -> FastAPI:
     )
 
     app = FastAPI(
-        title="JARVIS PC Agent",
+        title="JARVIS PC Agent (v11)",
         version=config.APP_VERSION,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
@@ -142,6 +152,13 @@ def create_app() -> FastAPI:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+    # Özellik 4: telefon LAN'dan farklı IP ile bağlandığı için bind=0.0.0.0
+    # durumunda (veya JARVIS_CORS_ALLOW_LAN=1 ile) tüm origin'lere izin verilir
+    # (allow_credentials=False olduğu için "*" güvenli kabul edilebilir).
+    bind_host = config.BIND_HOST
+    if bind_host == "0.0.0.0" or config.env("JARVIS_CORS_ALLOW_LAN") == "1":
+        if not configured_origins:
+            allowed_origins = ["*"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -155,6 +172,8 @@ def create_app() -> FastAPI:
         ],
         allow_credentials=False,
     )
+    # Özellik 16: büyük JSON yanıtları için gzip sıkıştırma (>1 KB).
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # ── Kimlik doğrulama (Prompt 1): JWT taşıyan isteklerde request.state.user.
     #    JARVIS_JWT_SECRET boşsa tokenlar yok sayılır; uçlar 503 döner.
@@ -276,6 +295,16 @@ def create_app() -> FastAPI:
     app.include_router(routes_social.router)
     app.include_router(routes_productivity.router)
     app.include_router(routes_privacy.router)  # madde 25 + 27
+    # ── JARVIS v11 (mega prompt) router'ları ──
+    app.include_router(routes_user_settings.router)  # Özellik 5B
+    app.include_router(routes_tasks.router)          # Özellik 6
+    app.include_router(routes_macros.router)         # Özellik 9
+    app.include_router(routes_habits.router)         # Özellik 10
+    app.include_router(routes_summary.router)        # Özellik 11
+    app.include_router(routes_location.router)       # Özellik 19
+    app.include_router(routes_screen.router)         # Özellik 7
+    app.include_router(routes_knowledge.router)      # Özellik 8
+    app.include_router(routes_atlas.router)          # Özellik 17
     app.include_router(ws_module.router)
 
     @app.on_event("startup")
@@ -283,6 +312,20 @@ def create_app() -> FastAPI:
         import asyncio
 
         app.state.stats.start()
+        # Özellik 5B: API anahtarı şifreleme katmanı (JARVIS_MASTER_KEY).
+        from .store import user_keys
+
+        user_keys.init()
+        # Özellik 11: günlük özet zamanlayıcısı (21:00).
+        from .core import daily_summary
+
+        app.state.daily_summary_task = asyncio.create_task(
+            daily_summary.scheduler_loop(app)
+        )
+        # Özellik 17: ATLAS görev kuyruğu çalışanı.
+        from .api import routes_atlas
+
+        app.state.atlas_worker = asyncio.create_task(routes_atlas.worker_loop(app))
         # Ses servisi TTS/sohbet için ana event loop'a bağlanır (Faz 3).
         app.state.voice.bind_loop(asyncio.get_running_loop())
         if app.state.relay is not None:

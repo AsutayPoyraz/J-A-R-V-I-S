@@ -273,10 +273,63 @@ def reset_login_locks() -> None:
 
 # ── Hesap akışları (db katmanı üzerine ince sarmalayıcı) ────────────────────
 
+_USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,32}$")
+
+
+def validate_username(username: str) -> str:
+    """Kullanıcı adı doğrulaması (Özellik 5A): min 3, alfanümerik + alt çizgi."""
+    username = (username or "").strip()
+    if not _USERNAME_RE.fullmatch(username):
+        raise AuthError(
+            "Kullanıcı adı en az 3 karakter olmalı ve yalnızca harf, sayı, "
+            "alt çizgi içerebilir.",
+            422,
+        )
+    return username.lower()
+
+
+def register_with_username(
+    username: str, first_name: str, last_name: str, password: str
+) -> dict[str, Any]:
+    """Kullanıcı adı akışıyla hesap oluşturur (Özellik 5A).
+
+    Validasyon: kullanıcı adı ^[a-zA-Z0-9_]{3,32}$, ad/soyad 2-40,
+    şifre min 8 (validate_password). Alan bazlı Türkçe hata mesajları.
+    """
+    username = validate_username(username)
+    first = validate_name(first_name, "Ad")
+    last = validate_name(last_name, "Soyad")
+    password = validate_password(password)
+    if database.get_user_by_username(username) is not None:
+        raise AuthError("Bu kullanıcı adı zaten alınmış.", 409)
+    try:
+        return database.create_user_username(username, first, last, hash_secret(password))
+    except ValueError as exc:
+        raise AuthError(str(exc), 409) from exc
+
+
+def authenticate_username(username: str, password: str, ip: str = "") -> dict[str, Any]:
+    """Kullanıcı adı + şifre ile doğrular (Özellik 5A).
+
+    Eski ad-soyad akışıyla aynı kilit/429 mekanizmasını paylaşır:
+    lock anahtarı username üzerinden türetilir.
+    """
+    username = (username or "").strip().lower()
+    check_not_locked(username, "username", ip)
+    user = database.get_user_by_username(username)
+    if user is None or not verify_secret(password, str(user.get("password_hash") or "")):
+        register_failure(username, "username", ip)
+        raise AuthError("Kullanıcı adı veya şifre hatalı.", 401)
+    register_success(username, "username", ip)
+    database.touch_user_login(str(user["id"]))
+    return user
+
+
 def user_public(user: dict[str, Any]) -> dict[str, Any]:
     """İstemciye dönen güvenli kullanıcı alanları (hash asla sızmaz)."""
     return {
         "user_id": user.get("id"),
+        "username": user.get("username") or "",
         "first_name": user.get("first_name"),
         "last_name": user.get("last_name"),
         "birth_date": user.get("birth_date"),

@@ -35,3 +35,15 @@ pyautogui==0.9.9             # sınırlı GUI otomasyonu (JARVIS_GUI_AUTOMATION=
 
 # Bölüm G — gözlemlenebilirlik (madde 31): opsiyonel Sentry
 sentry-sdk[fastapi]==2.19.2  # SENTRY_DSN boşsa tamamen pasif kalır
+
+# ══ JARVIS v11 (mega prompt) bağımlılıkları ═════════════════════════════════
+# Özellik 1: web arama — duckduckgo-search kurulmalı; yoksa httpx fallback kullanılır
+duckduckgo-search>=6.3,<9
+# Özellik 5B: kullanıcı API anahtarları Fernet (AES) şifreleme
+cryptography>=42,<51
+# Özellik 8: PDF ayrıştırma (TXT/MD/DOCX stdlib ile)
+pypdf>=4,<7
+
+# Özellik 14 notu: sounddevice Windows'ta PortAudio DLL'i gerektirir;
+# `pip install sounddevice` wheel'i DLL'i birlikte getirir — sorun olursa:
+# https://python-sounddevice.readthedocs.io/ (portaudio kurulum notu)

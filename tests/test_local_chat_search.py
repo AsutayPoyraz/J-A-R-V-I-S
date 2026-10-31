@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import jarvis_v10
+import jarvis_v11
 from services import database
 
 
@@ -25,7 +25,7 @@ class LocalChatSearchCommandTests(unittest.TestCase):
         command = "sohbet geçmişinde ara istanbul"
         database.db_save_msg(self.session_id, "user", command)
 
-        response = jarvis_v10.JarvisWindow._run_local_memory_skill(
+        response = jarvis_v11.JarvisWindow._run_local_memory_skill(
             None, command
         )
 
@@ -34,7 +34,7 @@ class LocalChatSearchCommandTests(unittest.TestCase):
         self.assertNotIn(command, response)
 
     def test_command_reports_when_local_history_has_no_match(self):
-        response = jarvis_v10.JarvisWindow._run_local_memory_skill(
+        response = jarvis_v11.JarvisWindow._run_local_memory_skill(
             None, "sohbet geçmişinde ara bulunmayan konu"
         )
 

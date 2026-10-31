@@ -85,6 +85,17 @@ class ConnectionManager:
                     self.disconnect(client_id)
         return sent
 
+    async def broadcast_all(self, payload: Any) -> int:
+        """Tüm açık soketlere yayın (kamera kurulum ilerlemesi vb.)."""
+        sent = 0
+        for client_id, connection in list(self._connections.items()):
+            try:
+                await connection.websocket.send_json(payload)
+                sent += 1
+            except Exception:
+                self.disconnect(client_id)
+        return sent
+
 
 manager = ConnectionManager()
 

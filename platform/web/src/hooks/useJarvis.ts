@@ -64,6 +64,11 @@ export function useJarvis() {
   const offlineNoteShown = useRef(false);
   /** WS hatırlatıcı kareleri geldiğinde CRUD yenileme tetikleyicisi. */
   const remindersRefreshRef = useRef<(() => void) | null>(null);
+  /** Özellik 16.4: WS kopunca exponential backoff + "Yeniden bağlanıyor" durumu. */
+  const [reconnecting, setReconnecting] = useState(false);
+  /** Özellik 7/11: WS üzerinden gelen öneri/özet bildirimleri. */
+  const [screenSuggestion, setScreenSuggestion] = useState<string | null>(null);
+  const [dailySummary, setDailySummary] = useState<string | null>(null);
 
   const markOnline = useCallback((value: boolean) => {
     if (value) offlineNoteShown.current = false;
@@ -80,7 +85,11 @@ export function useJarvis() {
     wsRef.current = ws;
     ws.onmessage = (ev) => {
       try {
-        const data = JSON.parse(ev.data) as SystemStats;
+        const data = JSON.parse(ev.data) as SystemStats & {
+          type?: string;
+          suggestion?: string;
+          content?: string;
+        };
         const incomingClientId = (data as { client_id?: string }).client_id;
         if (incomingClientId && incomingClientId !== clientId.get()) return;
         if ((data as { type?: string }).type === "reminder") {
@@ -89,21 +98,32 @@ export function useJarvis() {
           remindersRefreshRef.current?.();
           return;
         }
+        // Özellik 7: ekran önerisi (vision analizi) — toast gösterilir.
+        if ((data as { type?: string }).type === "screen.suggestion") {
+          if (data.suggestion) setScreenSuggestion(data.suggestion);
+          return;
+        }
+        // Özellik 11: günlük özet bildirimi.
+        if ((data as { type?: string }).type === "daily.summary") {
+          if (data.content) setDailySummary(data.content);
+          return;
+        }
         setStats(data);
         if (data.voice) setVoice(data.voice);
         markOnline(true);
         retryRef.current = 0;
+        setReconnecting(false);
       } catch {
         /* bozuk kare — yoksay */
       }
     };
     ws.onclose = () => {
       markOnline(false);
-      retryRef.current = Math.min(retryRef.current + 1, 5);
-      retryTimerRef.current = setTimeout(
-        wsConnect,
-        Math.min(3000 * retryRef.current, 15000)
-      );
+      // Özellik 16.4: exponential backoff 1s → 2s → 4s → ... → max 30s.
+      retryRef.current += 1;
+      setReconnecting(true);
+      const delay = Math.min(1000 * 2 ** (retryRef.current - 1), 30_000);
+      retryTimerRef.current = setTimeout(wsConnect, delay);
     };
     ws.onerror = () => ws.close();
   }, [markOnline]);
@@ -270,8 +290,25 @@ export function useJarvis() {
   }, [refreshWeather, settings?.city]);
 
   // ── Sohbet eylemleri ──
+  /** Özellik 18: kullanıcı sağlayıcı tercihi (session bazında hatırlanır). */
+  const [providerPref, setProviderPrefState] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem("jarvis.provider") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const setProviderPref = useCallback((value: string) => {
+    setProviderPrefState(value);
+    try {
+      sessionStorage.setItem("jarvis.provider", value);
+    } catch {
+      /* oturumluk yedek yok */
+    }
+  }, []);
+
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, providerOverride?: string) => {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
       setSending(true);
@@ -285,13 +322,19 @@ export function useJarvis() {
         },
       ]);
       try {
-        const r = await api.sendChat(trimmed);
+        // Özellik 18: /compare komutu → karşılaştırma sinyali; aksi halde tercih.
+        const isCompare = trimmed.toLowerCase().startsWith("/compare");
+        const message = isCompare ? trimmed.slice(8).trim() || trimmed : trimmed;
+        const provider = providerOverride ?? providerPref;
+        const r = await api.sendChat(message, provider);
         setMessages((prev) => [...prev.slice(-(MAX_CLIENT_MESSAGES - 1)),
           {
             id: `reply-${Date.now()}`,
             role: "assistant",
             content: r.reply,
             created_at: new Date().toISOString(),
+            provider: r.provider_used ?? r.provider,
+            fallback: r.fallback_occurred,
           },
         ]);
       } catch (e) {
@@ -300,7 +343,7 @@ export function useJarvis() {
         setSending(false);
       }
     },
-    [sending]
+    [sending, providerPref]
   );
 
   const clearConversation = useCallback(async () => {
@@ -562,6 +605,14 @@ export function useJarvis() {
     snoozeReminder,
     ackAllAlarms,
     reportActivity,
+    // ── v11 (mega prompt) ──
+    reconnecting,       // Özellik 16: "Yeniden bağlanıyor..." banner'ı
+    screenSuggestion,   // Özellik 7: vision önerisi (toast)
+    setScreenSuggestion,
+    dailySummary,       // Özellik 11: günlük özet bildirimi
+    setDailySummary,
+    providerPref,       // Özellik 18: sağlayıcı tercihi
+    setProviderPref,
   };
 }
 

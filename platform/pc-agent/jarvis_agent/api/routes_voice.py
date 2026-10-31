@@ -30,6 +30,33 @@ def voice_status(request: Request) -> dict:
     return _service(request).status()
 
 
+@router.get("/api/voice/devices")
+def voice_devices(request: Request) -> dict:
+    """Özellik 14.3: ses cihazları listesi (ayarlar sayfası dropdown'u)."""
+    from ..voice import audio as audio_module
+
+    devices = audio_module.list_input_devices()
+    inputs = [d for d in devices if d["max_input_channels"] > 0]
+    return {
+        "devices": devices,
+        "inputs": inputs,
+        "selected": _selected_device_index(audio_module),
+        "sd_available": audio_module._SD_AVAILABLE,
+    }
+
+
+def _selected_device_index(audio_module) -> Optional[int]:
+    import os
+
+    override = os.getenv("JARVIS_AUDIO_INPUT_DEVICE", "").strip()
+    if override.isdigit():
+        return int(override)
+    try:
+        return audio_module.resolve_input_device()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @router.post("/api/voice/start")
 def voice_start(request: Request) -> dict:
     service = _service(request)

@@ -9,9 +9,9 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 app = QApplication.instance() or QApplication([])
-import jarvis_v10
+import jarvis_v11
 
-win = jarvis_v10.JarvisWindow()
+win = jarvis_v11.JarvisWindow()
 win.show()
 QTest.qWait(800)
 # Özellik 6/4/10/3 bileşenleri yerinde mi?

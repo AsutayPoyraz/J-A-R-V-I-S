@@ -75,7 +75,7 @@ Gündelik sohbet Groq ile başlar. Bilgi sorularında Gemini önce denenir; gün
 bilgi/haber veya web araması isteklerinde Google Search grounding kullanılır ve
 bulunan kaynaklar yanıta eklenir. Uygun sağlayıcı yanıt veremezse normal sohbet
 diğer sağlayıcıya düşebilir. Sağlayıcı yönlendirme ve akış kodu
-`services/ai_engine.py` içindedir; `jarvis_v10.py` uygulamanın profil,
+`services/ai_engine.py` içindedir; `jarvis_v11.py` uygulamanın profil,
 persona ve ayarlarını bu servise bağlar. `.env` dosyasına anahtarları ekleyin:
 ```dotenv
 GROQ_API_KEY=...

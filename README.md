@@ -1,8 +1,8 @@
-J.A.R.V.I.S. v10.0 "Apex" — Stark Industries 2026
+J.A.R.V.I.S. v11 "Apex" — Stark Industries 2026
 "The pinnacle of desktop AI architecture, pushing the boundaries of autonomous systems."
 Engineered with the immense power of Python and PySide6, operating seamlessly across both Windows and macOS through a single codebase, this next-generation assistant is built to continuously evolve, scale, and expand its capabilities without limits.
 🔥 About the Project: Peak Engineering
-J.A.R.V.I.S. v10.0 "Apex" goes far beyond a standard desktop application; it is a masterclass in software craftsmanship combining AI automation, hardware control, self-healing troubleshooting, and futuristic 2026 UI aesthetics into a single unified ecosystem. 
+J.A.R.V.I.S. v11 "Apex" goes far beyond a standard desktop application; it is a masterclass in software craftsmanship combining AI automation, hardware control, self-healing troubleshooting, and futuristic 2026 UI aesthetics into a single unified ecosystem. 
 Featuring advanced intent recognition, a revolutionary 4-tier search engine, and the ATLAS subsystem capable of controlling your computer at the keyboard/mouse level, this version sets a brand-new standard in the developer world. And best of all: This is only the beginning! Its ever-evolving architecture ensures it will continuously grow, adapt, and learn new superpowers. 
 🚀 Key Features & Visual Architecture
 •	2026 Interface Aesthetics & Dynamic Glow Border: Traditional clunky top bars are completely replaced by an intelligent edge-hugging border that shifts colors dynamically—Red for errors, Blue/Orange for active processing, and a stunning Green for success/ready states (held for precisely 12 seconds or instantly overridden by new user input). Complete with rounded corners and smooth HSL transitions for an ultimate Stark OS / Siri experience. 
@@ -13,7 +13,7 @@ Featuring advanced intent recognition, a revolutionary 4-tier search engine, and
 •	Education & Curriculum Support: Full curriculum reference for grades 1–12, providing grade-appropriate explanations paired with a 3-second internal self-validation check.
 🛠️ Technical Architecture & Modularity
 The project is built on an impeccably clean, modular, and maintainable Python codebase:
-•	main.py / jarvis_v10.py: Core entry point and asynchronous QThread worker management. 
+•	main.py / jarvis_v11.py: Core entry point and asynchronous QThread worker management. 
 •	window_manager.py: Flawless mutually exclusive state machine managing transitions between JARVIS and ATLAS.
 •	status_border.py: Dynamic border color controller and smart 12-second timer integration. 
 •	research_engine.py: 4-tier search execution and reliability filtering engine. 
@@ -92,9 +92,9 @@ JARVIS_GROQ_API_KEY=your_groq_api_key_here
 JARVIS_GEMINI_API_KEY=your_gemini_api_key_here
 JARVIS_CITY=your_city_here
 🔮 Future Vision & Roadmap (An Evolving Ecosystem)
-J.A.R.V.I.S. v10.0 Apex is not a destination—it is the strongest milestone in our ongoing artificial intelligence journey. Upcoming updates include:
+J.A.R.V.I.S. v11 Apex is not a destination—it is the strongest milestone in our ongoing artificial intelligence journey. Upcoming updates include:
 •	Full-scale autonomous voice command processing and multi-modal visual perception depth.
 •	Native local protocol integrations with smart home automation hardware.
 •	Cloud-synchronized memory layers and a modular plugin marketplace.
 This project is a testament to passion, coding discipline, and the determination to build the future today. It continues to evolve, expand, and shatter limits!
-🌐 Note on Language Support: Currently, J.A.R.V.I.S. v10.0 Apex features full native Turkish language support. In upcoming project iterations, we are expanding our global reach to include multi-language options such as English, Italian, French, and more!
+🌐 Note on Language Support: Currently, J.A.R.V.I.S. v11 Apex features full native Turkish language support. In upcoming project iterations, we are expanding our global reach to include multi-language options such as English, Italian, French, and more!

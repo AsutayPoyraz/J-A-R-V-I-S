@@ -1,4 +1,84 @@
-/** Backend ile paylaşılan tip tanımları (Faz 1). */
+/** Backend ile paylaşılan tip tanımları (Faz 1 + v11). */
+
+// ══ JARVIS v11 (mega prompt) tipleri ════════════════════════════════════════
+
+/** Özellik 6: görev yöneticisi. */
+export interface Task {
+  id: number;
+  project_id: number | null;
+  project_name?: string | null;
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  status: "todo" | "in_progress" | "done";
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+  subtasks?: { id: number; task_id: number; title: string; done: number }[];
+}
+
+/** Özellik 9: komut makrosu (trigger'lı). */
+export interface CommandMacro {
+  id: number;
+  name: string;
+  trigger_phrase: string;
+  steps: {
+    type: "chat" | "api_call" | "delay";
+    params: Record<string, unknown>;
+  }[];
+  created_at: string;
+}
+
+/** Özellik 10: alışkanlık. */
+export interface Habit {
+  id: number;
+  name: string;
+  frequency: string;
+  color: string;
+  icon: string;
+  today_done: boolean;
+  streak: number;
+  logs: { date: string; completed: boolean }[];
+}
+
+/** Özellik 17: ATLAS web görevi. */
+export interface AtlasTask {
+  task_id: string;
+  instruction: string;
+  type: string;
+  status: "queued" | "running" | "done" | "error";
+  steps: { index: number; description: string; status: string; detail?: string }[];
+  result: string;
+}
+
+/** Özellik 2: istemci (bu cihaz) istatistikleri. */
+export interface ClientStats {
+  device_type: "phone" | "tablet" | "desktop" | "laptop";
+  platform: string;
+  device_memory_gb: number | null;
+  cpu_cores: number | null;
+  js_heap_used_mb: number | null;
+  js_heap_limit_mb: number | null;
+  battery_percent: number | null;
+  battery_charging: boolean | null;
+  connection_type: string;
+  downlink_mbps: number | null;
+  screen_width: number;
+  screen_height: number;
+  pixel_ratio: number;
+  online: boolean;
+  updated_at: number;
+}
+
+/** Özellik 12: karşılaştırma yanıtı. */
+export interface CompareResult {
+  provider: string;
+  response: string;
+  latency_ms: number;
+  tokens_used: number;
+  model: string;
+  error: string;
+}
 
 export type LogoState = "idle" | "thinking" | "speaking" | "offline";
 
@@ -62,6 +142,9 @@ export interface WeatherInfo {
 export interface ChatMessage {
   id: number | string;
   role: "user" | "assistant" | "system";
+  /** Özellik 18: yanıtı üreten sağlayıcı (fallback bilgisiyle). */
+  provider?: string;
+  fallback?: boolean;
   content: string;
   created_at: string;
 }
@@ -70,6 +153,11 @@ export interface CameraStatus {
   status: "live" | "off";
   width: number | null;
   height: number | null;
+  /** Özellik 3: zenginleştirilmiş durum alanları (/api/camera/status). */
+  opencv_installed?: boolean;
+  camera_available?: boolean;
+  disabled_by_env?: boolean;
+  error?: string;
 }
 
 /** Faz 3: sesli mod durumu — /api/voice/status ve /ws/stats içindeki "voice". */
