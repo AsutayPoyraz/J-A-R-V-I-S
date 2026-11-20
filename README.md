@@ -1,4 +1,4 @@
-🤖 JARVIS v11 "Apex" — Stark Industries 2026
+🤖 JARVIS v10 "Apex" — Stark Industries 2026
 <p align="center">
   <img src="https://img.shields.io/badge/VERSION-v11.0.0_APEX-38BDF8?style=for-the-badge&logo=python&logoColor=white" alt="Version" />
   &nbsp;&nbsp;
@@ -6,17 +6,14 @@
   &nbsp;&nbsp;
   <img src="https://img.shields.io/badge/STACK-PYTHON_3.11%2B_%7C_PYSIDE6_%7C_FASTAPI-7C3AED?style=for-the-badge&logo=qt&logoColor=white" alt="Stack" />
 </p>
-
-> *"Pushing the boundaries of autonomous systems—the pinnacle of desktop artificial intelligence architecture."*
-
----
+"Pushing the boundaries of autonomous systems—the pinnacle of desktop artificial intelligence architecture."
 
 🔥 About the Project: Peak Engineering
-Designed with the raw power of Python and PySide6, JARVIS v11 "Apex" runs seamlessly across both Windows and macOS from a single unified codebase, engineered to continuously evolve, scale, and expand its capabilities without limits.
+Designed with the raw power of Python and PySide6, JARVIS v10 "Apex" runs seamlessly across both Windows and macOS from a single unified codebase, engineered to continuously evolve, scale, and expand its capabilities without limits.
 
-Going far beyond a conventional desktop application, JARVIS v11 "Apex" is a showcase of software craftsmanship that unifies AI automation, hardware-level system control, self-healing troubleshooting, and a futuristic 2026 UI aesthetic into a single cohesive ecosystem. Powered by advanced intent recognition, a revolutionary 4-tier search engine, and the ATLAS subsystem capable of controlling your computer at the keyboard and mouse level, this release sets a brand-new standard in developer tooling.
+Going far beyond a conventional desktop application, JARVIS v10 "Apex" is a showcase of software craftsmanship that unifies AI automation, hardware-level system control, self-healing troubleshooting, and a futuristic 2026 UI aesthetic into a single cohesive ecosystem. Powered by advanced intent recognition, a revolutionary 4-tier search engine, and the ATLAS subsystem capable of controlling your computer at the keyboard and mouse level, this release sets a brand-new standard in developer tooling.
 
-And the best part: this is only the beginning. Its continuously evolving architecture enables it to growth, adapt, and master new superpowers over time.
+And the best part: this is only the beginning. Its continuously evolving architecture enables it to grow, adapt, and master new superpowers over time.
 
 ✨ Core Features & Visual Architecture
 2026 UI Aesthetic & Dynamic Glowing Border: Traditional, bulky title bars have been completely replaced with an intelligent, edge-hugging border that dynamically shifts colors based on real-time system state—Red for errors, Blue/Orange for active processing, and a striking Green for success/ready states (held for exactly 12 seconds or immediately overridden upon new user input). Combined with rounded corners and smooth HSL color transitions, it delivers the ultimate Stark OS / Siri desktop experience.
@@ -34,7 +31,7 @@ Education & Curriculum Support: Provides comprehensive curriculum reference cove
 🛠️ Technical Architecture & Modularity
 The project is built upon an exceptionally clean, modular, and maintainable Python codebase:
 
-main.py / jarvis_v11.py: Core application entry point and asynchronous QThread worker management.
+main.py / jarvis_v10.py: Core application entry point and asynchronous QThread worker management.
 
 window_manager.py: Seamless, mutually exclusive state machine governing transitions between JARVIS and ATLAS.
 
@@ -118,7 +115,7 @@ JARVIS_GROQ_API_KEY=your_groq_api_key_here
 JARVIS_GEMINI_API_KEY=your_gemini_api_key_here
 JARVIS_CITY=your_city_here
 🔮 Future Vision & Roadmap (An Evolving Ecosystem)
-JARVIS v11 "Apex" is not a final destination—it is the most powerful milestone yet in our ongoing AI journey. Upcoming updates include:
+JARVIS v10 "Apex" is not a final destination—it is the most powerful milestone yet in our ongoing AI journey. Upcoming updates include:
 
 Full-Scale Autonomous Voice & Vision: End-to-end autonomous voice command processing paired with deep multimodal visual perception.
 
@@ -129,4 +126,4 @@ Cloud Memory & Plugin Marketplace: Cloud-synchronized persistent memory layers a
 This project stands as a testament to passion, disciplined engineering, and the determination to build the future today. Continuing to evolve, expand, and break boundaries!
 
 🌐 Language Support Note
-Currently, JARVIS v11 "Apex" features full Turkish language support out of the box. In upcoming releases, we are expanding global accessibility to include full multi-language support covering English, Italian, French, and more!
+Currently, JARVIS v10 "Apex" features full Turkish language support out of the box. In upcoming releases, we are expanding global accessibility to include full multi-language support covering English, Italian, French, and more!
